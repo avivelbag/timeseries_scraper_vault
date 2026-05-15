@@ -56,4 +56,4 @@ def fetch(url: str, **kwargs) -> requests.Response:
             continue
         resp.raise_for_status()
         return resp
-    resp.raise_for_status()
+    return resp
