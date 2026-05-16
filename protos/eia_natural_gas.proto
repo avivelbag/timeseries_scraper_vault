@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package scraper;
+
+message EiaNaturalGasRecord {
+  string period_date         = 1;  // "YYYY-MM"
+  float  price_usd_per_mmbtu = 2;
+  string location            = 3;  // "Henry Hub"
+  string source_url          = 4;
+  string fetch_time          = 5;  // ISO-8601 UTC
+}
