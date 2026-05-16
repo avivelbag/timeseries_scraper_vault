@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 
 from src.bq_uploader import upload_rows
-from src.http_client import fetch
+from src.scrapers.http_client import fetch
 from protos.eia_natural_gas_pb2 import EiaNaturalGasRecord  # type: ignore[attr-defined]
 
 SOURCE_URL = "https://www.eia.gov/dnav/ng/hist/rngwhhdm.htm"

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 
 from src.bq_uploader import upload_rows
-from src.http_client import fetch
+from src.scrapers.http_client import fetch
 from protos.eia_petroleum_prices_pb2 import PetroleumPriceRecord  # type: ignore[attr-defined]
 
 SOURCE_URL = "https://www.eia.gov/dnav/pet/pet_pri_gnd_dcus_nus_w.htm"

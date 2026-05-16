@@ -1,13 +1,8 @@
-"""Shared HTTP client for all scrapers.
-
-Enforces robots.txt compliance, polite rate-limiting, and exponential backoff
-uniformly so individual scrapers need only call fetch().
-"""
-
 import random
 import time
 import urllib.robotparser
 from functools import lru_cache
+from typing import Any
 from urllib.parse import urlparse
 
 import requests
@@ -17,14 +12,6 @@ AGENT = "TimeSeriesBot/1.0 (+https://github.com/avivalbeg/circle-jerk2)"
 
 @lru_cache(maxsize=256)
 def _robots(base_url: str) -> urllib.robotparser.RobotFileParser:
-    """Return a cached RobotFileParser for the given base URL.
-
-    Args:
-        base_url: Scheme + netloc (e.g. "https://example.com").
-
-    Returns:
-        Parsed RobotFileParser for the domain's robots.txt.
-    """
     rp = urllib.robotparser.RobotFileParser()
     rp.set_url(base_url + "/robots.txt")
     rp.read()
@@ -37,28 +24,13 @@ def fetch(
     session: requests.Session | None = None,
     min_delay: float = 2.0,
     max_delay: float = 5.0,
-    **kwargs: object,
+    **kwargs: Any,
 ) -> requests.Response:
-    """Fetch a URL with robots.txt compliance, polite delay, and exponential backoff.
+    """Fetch url enforcing robots.txt, polite delay, and exponential backoff.
 
-    Checks robots.txt once per domain per process (result is cached). Sleeps a
-    random duration in [min_delay, max_delay] before every request. Retries on
-    429 or 5xx with exponential backoff (base 2, cap 120 s) up to 5 attempts,
-    then raises. Sets User-Agent to AGENT on every request.
-
-    Args:
-        url: The URL to fetch.
-        session: Optional requests.Session to reuse. Created fresh if None.
-        min_delay: Lower bound of the pre-request polite sleep (seconds).
-        max_delay: Upper bound of the pre-request polite sleep (seconds).
-        **kwargs: Forwarded verbatim to session.get().
-
-    Returns:
-        The successful requests.Response.
-
-    Raises:
-        RuntimeError: If robots.txt forbids the path for AGENT.
-        requests.HTTPError: After all 5 retry attempts are exhausted.
+    Raises RuntimeError if robots.txt disallows the path. Sleeps [min_delay,
+    max_delay] before each request. Retries 429/5xx up to 5 times (base-2
+    backoff, cap 120 s) then raises HTTPError.
     """
     parsed = urlparse(url)
     base = f"{parsed.scheme}://{parsed.netloc}"

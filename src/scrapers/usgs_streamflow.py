@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 
 from src.bq_uploader import upload_rows
-from src.http_client import fetch
+from src.scrapers.http_client import fetch
 from protos.usgs_streamflow_pb2 import UsgsStreamflowRecord  # type: ignore[attr-defined]
 
 SOURCE_URL = (
