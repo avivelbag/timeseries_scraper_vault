@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package scraper;
+
+message AarWeeklyRailTrafficRecord {
+  string week_ending_date = 1;
+  string commodity_group = 2;
+  int64 carloads = 3;
+  double carloads_yoy_pct = 4;
+  int64 intermodal_units = 5;
+  double intermodal_yoy_pct = 6;
+  string source_url = 7;
+  string fetch_time = 8;
+}
