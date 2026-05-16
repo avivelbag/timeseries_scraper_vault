@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package scraper;
+
+message FedG17Record {
+  string series_id = 1;
+  string series_name = 2;
+  string reference_date = 3;
+  double index_value = 4;
+  optional double capacity_utilization_pct = 5;
+  string unit = 6;
+  string source_url = 7;
+  string fetch_time = 8;
+}
