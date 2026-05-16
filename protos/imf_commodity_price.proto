@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package scraper;
+
+message ImfCommodityPrice {
+  string commodity_name = 1;
+  string commodity_code = 2;
+  string date           = 3;  // "YYYY-MM"
+  double price_usd      = 4;
+  string units          = 5;
+  string source_url     = 6;
+  string fetch_time     = 7;  // ISO-8601 UTC
+}

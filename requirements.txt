@@ -3,3 +3,4 @@ beautifulsoup4
 lxml
 protobuf
 google-cloud-bigquery
+openpyxl
