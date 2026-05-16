@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package scraper;
+
+message FedH15Record {
+  string period_date = 1;
+  string series_name = 2;
+  string maturity = 3;
+  string frequency = 4;
+  float rate = 5;
+  string source_url = 6;
+  string fetch_time = 7;
+}

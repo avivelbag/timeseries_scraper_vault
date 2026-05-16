@@ -64,7 +64,7 @@ def check_all(scrapers: dict[str, tuple[ModuleType, str]]) -> list[HealthCheck]:
 
 def main() -> None:
     import os
-    from src.scrapers import eia_petroleum, treasury_yield_curve
+    from src.scrapers import eia_petroleum, fed_h15_rates, treasury_yield_curve
 
     fixtures_dir = os.path.join(os.path.dirname(__file__), "..", "tests", "fixtures")
 
@@ -79,6 +79,11 @@ def main() -> None:
     if os.path.exists(treasury_fixture):
         with open(treasury_fixture, "r", encoding="utf-8") as fh:
             scrapers["treasury_yield_curve"] = (treasury_yield_curve, fh.read())
+
+    fed_h15_fixture = os.path.join(fixtures_dir, "fed_h15_sample.html")
+    if os.path.exists(fed_h15_fixture):
+        with open(fed_h15_fixture, "r", encoding="utf-8") as fh:
+            scrapers["fed_h15_rates"] = (fed_h15_rates, fh.read())
 
     if not scrapers:
         print("WARN: no fixtures found; no scrapers checked.")
