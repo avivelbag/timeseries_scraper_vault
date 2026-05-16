@@ -83,13 +83,11 @@ def run(html: str, source_url: str = "") -> list[dict]:
         if not any(_header_to_field(h) is not None for h in headers):
             continue
 
-        # Key the column map by proto field name so drift-normalised headers land
-        # in the same slot as their canonical equivalents.
-        col_map: dict[str, int] = {
-            _header_to_field(h): i
-            for i, h in enumerate(headers)
-            if _header_to_field(h) is not None
-        }
+        col_map: dict[str, int] = {}
+        for i, h in enumerate(headers):
+            field = _header_to_field(h)
+            if field is not None:
+                col_map[field] = i
 
         for tr in table.find_all("tr")[1:]:
             cells = [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
@@ -148,12 +146,6 @@ def scrape(year_month: str | None = None) -> list[dict]:
 
 
 def _iter_months(start_month: str, end_month: str):
-    """Yield YYYYMM strings from start_month to end_month inclusive.
-
-    Args:
-        start_month: First month in YYYY-MM format.
-        end_month: Last month in YYYY-MM format.
-    """
     cur = datetime.strptime(start_month, "%Y-%m")
     end = datetime.strptime(end_month, "%Y-%m")
     while cur <= end:
