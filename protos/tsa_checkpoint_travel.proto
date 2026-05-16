@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package scraper;
+
+message TsaCheckpointRecord {
+  string date = 1;
+  int64 travelers_total = 2;
+  int64 travelers_year_ago = 3;
+  string source_url = 4;
+  string fetch_time = 5;
+}
