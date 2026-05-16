@@ -1,0 +1,9 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Orchestrator runtime state and logs
+/var/
+nohup.out
