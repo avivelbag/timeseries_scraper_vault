@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package scraper;
+
+message CotRecord {
+  string report_date                = 1;
+  string commodity_name             = 2;
+  string cftc_contract_market_code  = 3;
+  int64  noncommercial_long         = 4;
+  int64  noncommercial_short        = 5;
+  int64  commercial_long            = 6;
+  int64  commercial_short           = 7;
+  int64  total_reportable_long      = 8;
+  int64  total_reportable_short     = 9;
+  int64  nonreportable_long         = 10;
+  int64  nonreportable_short        = 11;
+  string source_url                 = 12;
+  string fetch_time                 = 13;
+}
