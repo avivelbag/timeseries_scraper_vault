@@ -3,12 +3,12 @@ syntax = "proto3";
 package scraper;
 
 message RigCountRecord {
-  string report_date = 1;          // ISO date YYYY-MM-DD
-  string region = 2;               // "us" or "canada"
-  string drill_type = 3;           // "oil", "gas", or "misc"
+  string report_date = 1;
+  string region = 2;
+  string drill_type = 3;
   int32 rig_count = 4;
   int32 week_over_week_change = 5;
   int32 year_ago_count = 6;
   string source_url = 7;
-  string fetch_time = 8;           // ISO-8601 UTC
+  string fetch_time = 8;
 }

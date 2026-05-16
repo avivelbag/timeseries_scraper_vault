@@ -1,8 +1,3 @@
-"""Tests for src/scrapers/baker_hughes_rig_count.py.
-
-All tests use local fixture data or inline workbooks — no live network calls are made.
-"""
-
 import os
 import re
 import sys
@@ -48,16 +43,6 @@ def _make_workbook(
     headers: list | None = None,
     rows: list | None = None,
 ) -> openpyxl.Workbook:
-    """Build an in-memory workbook with a single sheet.
-
-    Args:
-        sheet_title: Title for the single worksheet.
-        headers: Column header list, defaulting to the standard BH layout.
-        rows: Data rows as lists; each inner list must match headers length.
-
-    Returns:
-        An openpyxl Workbook ready to be passed to parse_workbook.
-    """
     if headers is None:
         headers = ["PublishDate", "LandSea", "Location", "DrillFor", "Count", "PriorWeek", "YearAgo"]
     wb = openpyxl.Workbook()
@@ -70,13 +55,11 @@ def _make_workbook(
 
 
 def _fixture_bytes() -> bytes:
-    """Return raw bytes of the fixture Excel file."""
     with open(FIXTURE_PATH, "rb") as fh:
         return fh.read()
 
 
 def _mock_excel_response(raw_bytes: bytes) -> MagicMock:
-    """Return a mock requests.Response that streams the given bytes."""
     resp = MagicMock(spec=requests.Response)
     resp.iter_content = lambda chunk_size=65536: iter([raw_bytes])
     return resp
@@ -221,14 +204,12 @@ class TestFindExcelUrl:
 class TestParseWorkbookFixture:
     @pytest.fixture(scope="class")
     def fixture_records(self):
-        """Load and parse the on-disk fixture file."""
         wb = openpyxl.load_workbook(FIXTURE_PATH, read_only=True, data_only=True)
         records = parse_workbook(wb, SOURCE_URL)
         wb.close()
         return records
 
     def test_correct_row_count(self, fixture_records):
-        """Fixture has 12 data rows; all should parse successfully."""
         assert len(fixture_records) == 12
 
     def test_all_required_string_fields_populated(self, fixture_records):
@@ -255,8 +236,6 @@ class TestParseWorkbookFixture:
             assert rec.rig_count > 0, f"Non-positive rig_count in {rec}"
 
     def test_week_over_week_change_computed(self, fixture_records):
-        """week_over_week_change must equal rig_count minus PriorWeek in every row."""
-        # For 2024-01-05 US Oil: count=480, prior=478, wow=2
         us_oil = [r for r in fixture_records if r.report_date == "2024-01-05" and r.region == "us" and r.drill_type == "oil"]
         assert len(us_oil) == 1
         assert us_oil[0].week_over_week_change == 2
@@ -350,7 +329,6 @@ class TestParseWorkbookEdgeCases:
             parse_workbook(wb, SOURCE_URL)
 
     def test_large_workbook(self):
-        """100 rows across US/Canada × Oil/Gas/Misc should all parse cleanly."""
         rows = []
         for i in range(100):
             date = datetime(2024, 1, 1 + (i % 28))
@@ -433,14 +411,12 @@ class TestScrapeFunction:
         _robots.cache_clear()
 
     def _make_page_response(self, excel_url: str) -> MagicMock:
-        """Mock page response with an HTML link pointing at excel_url."""
         html = f'<html><body><a href="{excel_url}">Download Excel</a></body></html>'
         resp = MagicMock(spec=requests.Response)
         resp.text = html
         return resp
 
     def _make_excel_response(self) -> MagicMock:
-        """Mock Excel response streaming the fixture file bytes."""
         return _mock_excel_response(_fixture_bytes())
 
     def test_scrape_makes_two_fetch_calls(self):
@@ -502,8 +478,6 @@ class TestScrapeFunction:
 
 
 class TestRobotsTxtEnforcement:
-    """Assert the scraper aborts when robots.txt disallows the path."""
-
     @pytest.fixture(autouse=True)
     def clear_robot_cache(self):
         _robots.cache_clear()
@@ -512,8 +486,6 @@ class TestRobotsTxtEnforcement:
 
     @pytest.fixture()
     def disallow_server(self):
-        """Start a local HTTP server that serves a disallowing robots.txt."""
-
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 body = b"User-agent: *\nDisallow: /\n"

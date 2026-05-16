@@ -1,18 +1,7 @@
-"""Baker Hughes North America Rotary Rig Count weekly Excel scraper.
-
-Downloads the weekly Excel workbook from rigcount.bakerhughes.com/na-rig-count,
-locates the sheet whose title contains "North America", and maps each data row to
-a RigCountRecord proto. Column layout expected in the workbook:
-
-  PublishDate | LandSea | Location | DrillFor | Count | PriorWeek | YearAgo
-
-week_over_week_change is derived as Count − PriorWeek.
-Region and drill-type values are normalised to lowercase ASCII strings.
-"""
-
 import io
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urljoin
 
 import openpyxl
 from bs4 import BeautifulSoup
@@ -53,27 +42,14 @@ _EXPECTED_HEADERS: frozenset[str] = frozenset({"publishdate", "location", "drill
 
 
 def _normalise_region(raw: str) -> Optional[str]:
-    """Map a Location cell to a canonical region string ('us' or 'canada').
-
-    Returns None when the value does not match any known region code.
-    """
     return _REGION_MAP.get(raw.strip().lower())
 
 
 def _normalise_drill_type(raw: str) -> Optional[str]:
-    """Map a DrillFor cell to a canonical drill-type string ('oil', 'gas', or 'misc').
-
-    Returns None when the value does not match any known drill-type code.
-    """
     return _DRILL_TYPE_MAP.get(raw.strip().lower())
 
 
 def _parse_date(raw: object) -> Optional[str]:
-    """Convert a PublishDate cell value to ISO YYYY-MM-DD.
-
-    Handles datetime objects returned by openpyxl for date-typed cells and
-    common string formats. Returns None when the value cannot be parsed.
-    """
     if isinstance(raw, datetime):
         return raw.strftime("%Y-%m-%d")
     if isinstance(raw, str):
@@ -87,7 +63,6 @@ def _parse_date(raw: object) -> Optional[str]:
 
 
 def _safe_int(val: object) -> Optional[int]:
-    """Convert a numeric cell value to int, returning None on failure."""
     if val is None:
         return None
     try:
@@ -97,58 +72,18 @@ def _safe_int(val: object) -> Optional[int]:
 
 
 def _find_excel_url(html: str, page_url: str) -> str:
-    """Extract the first .xlsx download link from the Baker Hughes rig count page.
-
-    Scans all <a href> tags for a link whose href ends in '.xlsx' or '.xls'.
-    Relative hrefs are resolved against page_url.
-
-    Args:
-        html: Raw HTML of the Baker Hughes NA rig count page.
-        page_url: The URL the page was fetched from, used to resolve relative links.
-
-    Returns:
-        Absolute URL of the Excel workbook.
-
-    Raises:
-        ValueError: When no Excel download link is found in the page.
-    """
     soup = BeautifulSoup(html, "lxml")
     for tag in soup.find_all("a", href=True):
-        href: str = tag["href"]
+        href = str(tag["href"])
         lower = href.lower()
         if lower.endswith(".xlsx") or lower.endswith(".xls"):
             if href.startswith("http://") or href.startswith("https://"):
                 return href
-            from urllib.parse import urljoin
             return urljoin(page_url, href)
     raise ValueError(f"No Excel download link found on {page_url}")
 
 
 def parse_workbook(wb: openpyxl.Workbook, source_url: str) -> list[RigCountRecord]:
-    """Parse a Baker Hughes rig count workbook into a list of RigCountRecord instances.
-
-    Locates the first sheet whose title contains 'North America' (case-insensitive).
-    Scans rows from the top to find a header row containing at least the columns
-    PublishDate, Location, DrillFor, and Count, then iterates all subsequent rows.
-
-    A data row is included when:
-    - PublishDate parses as a valid YYYY-MM-DD date.
-    - Location maps to a known region ('us' or 'canada').
-    - DrillFor maps to a known drill type ('oil', 'gas', or 'misc').
-    - Count is a non-None integer.
-    PriorWeek and YearAgo default to 0 when absent or unparseable.
-
-    Args:
-        wb: An open openpyxl Workbook object.
-        source_url: The URL the workbook was fetched from; stored on every record.
-
-    Returns:
-        List of RigCountRecord dataclass instances.
-
-    Raises:
-        ValueError: When no sheet with 'North America' in its title is found, or when
-            the expected column headers are not present in any scanned row.
-    """
     sheet = None
     for ws in wb.worksheets:
         if "north america" in ws.title.lower():
@@ -240,17 +175,6 @@ def parse_workbook(wb: openpyxl.Workbook, source_url: str) -> list[RigCountRecor
 
 
 def scrape() -> list[RigCountRecord]:
-    """Fetch the Baker Hughes NA rig count Excel workbook and return parsed records.
-
-    Makes two HTTP requests via http_client.fetch (which enforces robots.txt
-    compliance, applies a polite delay of ≥3 s before each request, and retries
-    429/5xx with exponential backoff):
-    1. The NA rig count landing page, to extract the Excel download URL.
-    2. The Excel file itself, streamed into an in-memory buffer.
-
-    Returns:
-        List of RigCountRecord instances.
-    """
     page_resp = fetch(SOURCE_URL, min_delay=3.0, max_delay=6.0)
     excel_url = _find_excel_url(page_resp.text, SOURCE_URL)
 
@@ -266,13 +190,6 @@ def scrape() -> list[RigCountRecord]:
 
 
 def main() -> int:
-    """Scrape Baker Hughes rig count data and upload to BigQuery.
-
-    Uploads to the baker_hughes_rig_count table, deduplicating by report_date.
-
-    Returns:
-        Count of rows successfully inserted.
-    """
     records = scrape()
     return upload_rows("baker_hughes_rig_count", records, date_column="report_date")
 
