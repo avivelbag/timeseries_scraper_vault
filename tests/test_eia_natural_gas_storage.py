@@ -19,6 +19,7 @@ from src.scrapers.eia_natural_gas_storage import (
     _build_column_map,
     _parse_date,
     _record_to_proto,
+    backfill,
     run,
     scrape,
 )
@@ -448,3 +449,63 @@ class TestScrapeFunction:
 
         direct = run(sample_html)
         assert scraped == direct
+
+
+# ---------------------------------------------------------------------------
+# backfill() tests
+# ---------------------------------------------------------------------------
+
+
+class TestBackfillFunction:
+    """Tests for backfill(start_date, end_date).
+
+    The fixture has two weeks: 2025-01-03 and 2025-01-10, with 6 regions each
+    (12 records total).  All tests mock scrape() so no live network calls occur.
+    """
+
+    @pytest.fixture
+    def _patch_scrape(self, sample_html):
+        """Patch scrape() to return records parsed from the fixture."""
+        records = run(sample_html)
+        with patch("src.scrapers.eia_natural_gas_storage.scrape", return_value=records):
+            yield records
+
+    def test_full_range_returns_all_records(self, _patch_scrape):
+        """start_date..end_date spanning both weeks yields all 12 records."""
+        result = backfill("2025-01-01", "2025-01-31")
+        assert len(result) == 12
+
+    def test_single_week_filter(self, _patch_scrape):
+        """Exact start_date == end_date == week1 returns only the 6 week-1 records."""
+        result = backfill("2025-01-03", "2025-01-03")
+        assert len(result) == 6
+        assert all(r["report_date"] == "2025-01-03" for r in result)
+
+    def test_boundary_inclusive_both_ends(self, _patch_scrape):
+        """Closed interval: both boundary dates are included when they match records."""
+        result = backfill("2025-01-03", "2025-01-10")
+        dates = {r["report_date"] for r in result}
+        assert "2025-01-03" in dates
+        assert "2025-01-10" in dates
+
+    def test_start_after_end_raises_value_error(self, _patch_scrape):
+        """start_date > end_date is logically invalid and must raise ValueError."""
+        with pytest.raises(ValueError, match="must be <="):
+            backfill("2025-01-10", "2025-01-03")
+
+    def test_range_with_no_data_raises_value_error(self, _patch_scrape):
+        """A date range that contains no records must raise ValueError."""
+        with pytest.raises(ValueError, match="No records found"):
+            backfill("2024-01-01", "2024-12-31")
+
+    def test_returned_records_have_all_required_fields(self, _patch_scrape):
+        """Every backfill record must carry all required fields."""
+        required = ("region", "storage_bcf", "year_ago_bcf", "five_year_avg_bcf", "report_date", "source_url")
+        for r in backfill("2025-01-01", "2025-01-31"):
+            for key in required:
+                assert r[key] is not None, f"None in {key}"
+
+    def test_equal_start_end_outside_data_raises(self, _patch_scrape):
+        """Edge: start == end == a date not in the data raises ValueError."""
+        with pytest.raises(ValueError, match="No records found"):
+            backfill("2025-01-05", "2025-01-05")

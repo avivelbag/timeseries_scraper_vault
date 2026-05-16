@@ -204,6 +204,38 @@ def scrape() -> list[dict]:
     return run(resp.text, source_url=SOURCE_URL)
 
 
+def backfill(start_date: str, end_date: str) -> list[dict]:
+    """Return historical EIA storage records within a closed date range.
+
+    Fetches the full historical table via scrape() (a single HTTP request that
+    returns all available weeks) and filters to records whose report_date falls
+    within [start_date, end_date]. ISO-8601 lexicographic comparison is used,
+    so YYYY-MM-DD string ordering matches chronological ordering.
+
+    Args:
+        start_date: ISO-8601 date string (YYYY-MM-DD), inclusive lower bound.
+        end_date: ISO-8601 date string (YYYY-MM-DD), inclusive upper bound.
+
+    Returns:
+        Filtered list of record dicts in the same format as run().
+
+    Raises:
+        ValueError: When start_date > end_date or no records fall in the range.
+        RuntimeError: Propagated from scrape() when robots.txt disallows SOURCE_URL.
+    """
+    if start_date > end_date:
+        raise ValueError(
+            f"start_date {start_date!r} must be <= end_date {end_date!r}"
+        )
+    records = scrape()
+    filtered = [r for r in records if start_date <= r["report_date"] <= end_date]
+    if not filtered:
+        raise ValueError(
+            f"No records found in date range [{start_date}, {end_date}]"
+        )
+    return filtered
+
+
 def _record_to_proto(record: dict) -> EiaNaturalGasStorageRecord:
     """Convert a parsed record dict to an EiaNaturalGasStorageRecord stub.
 
