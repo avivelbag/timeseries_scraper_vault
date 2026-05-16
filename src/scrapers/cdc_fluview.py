@@ -110,35 +110,42 @@ def run(html: str) -> list[dict]:
         total_col = _find_col(headers, "total patients")
         ili_pat_col = _find_col(headers, "ili patients")
 
-        if any(c is None for c in (region_col, year_col, week_col, ili_pct_col, total_col, ili_pat_col)):
+        if (
+            region_col is None
+            or year_col is None
+            or week_col is None
+            or ili_pct_col is None
+            or total_col is None
+            or ili_pat_col is None
+        ):
             continue
 
-        min_cols = max(region_col, year_col, week_col, ili_pct_col, total_col, ili_pat_col) + 1  # type: ignore[arg-type]
+        min_cols = max(region_col, year_col, week_col, ili_pct_col, total_col, ili_pat_col) + 1
 
         for tr in table.find_all("tr")[1:]:
             cells = [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
             if len(cells) < min_cols:
                 continue
 
-            region = cells[region_col]  # type: ignore[index]
+            region = cells[region_col]
             if region not in _VALID_REGIONS:
                 continue
 
             try:
-                year = int(cells[year_col])  # type: ignore[index]
-                week = int(cells[week_col])  # type: ignore[index]
+                year = int(cells[year_col])
+                week = int(cells[week_col])
             except ValueError:
                 continue
 
-            raw_pct = cells[ili_pct_col].rstrip("%")  # type: ignore[index]
+            raw_pct = cells[ili_pct_col].rstrip("%")
             try:
                 ili_percent = float(raw_pct)
             except ValueError:
                 continue
 
             try:
-                total_patients = int(cells[total_col])  # type: ignore[index]
-                ili_patients = int(cells[ili_pat_col])  # type: ignore[index]
+                total_patients = int(cells[total_col])
+                ili_patients = int(cells[ili_pat_col])
             except ValueError:
                 continue
 
