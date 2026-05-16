@@ -15,8 +15,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from google.api_core.exceptions import NotFound
 
-from src.bq_uploader import fetch_existing_dates, upload_rows
+from src.bq_uploader import fetch_existing_dates, upload_rows, _record_to_dict
 from protos.eia_petroleum_prices_pb2 import PetroleumPriceRecord  # type: ignore[attr-defined]
+from protos.bls_jolts_pb2 import BlsJoltsRecord  # type: ignore[attr-defined]
+from protos.fed_h8_bank_assets_pb2 import FedH8BankAssets  # type: ignore[attr-defined]
 
 
 def _make_proto_row(region: str = "U.S.", price: float = 3.12) -> PetroleumPriceRecord:
@@ -340,3 +342,95 @@ class TestUploadRowsDeduplication:
             upload_rows("tbl", [_make_proto_row_with_date("2025-01-01")])
 
         mock_fetch.assert_not_called()
+
+
+def _make_jolts_dataclass_row(period: str = "2025-01", level: float = 7500.0) -> BlsJoltsRecord:
+    """Build a BlsJoltsRecord dataclass stub with fetch_time set via FromDatetime."""
+    from datetime import datetime, timezone
+    msg = BlsJoltsRecord()
+    msg.series_id = "job_openings_total_nonfarm"
+    msg.period = period
+    msg.data_type = "job_openings"
+    msg.industry = "Total nonfarm"
+    msg.level_thousands = level
+    msg.rate_pct = 4.6
+    msg.source_url = "https://www.bls.gov/news.release/jolts.t01.htm"
+    msg.fetch_time.FromDatetime(datetime(2025, 1, 6, 12, 0, 0, tzinfo=timezone.utc))
+    return msg
+
+
+class TestRecordToDict:
+    """Tests for _record_to_dict — the real (non-mocked) serialization path.
+
+    These tests verify the contract the orchestrator flagged as broken:
+    dataclass stubs must serialize to plain JSON-compatible dicts so that
+    BigQuery's insert_rows_json actually receives serializable data.
+    """
+
+    def test_real_protobuf_message_uses_message_to_dict(self):
+        """Real protobuf Message instances are routed through MessageToDict."""
+        proto_row = _make_proto_row()
+        result = _record_to_dict(proto_row)
+        assert isinstance(result, dict)
+        assert result.get("source_url") == "https://www.eia.gov/test"
+        assert result.get("period_date") == "2025-01-06"
+
+    def test_dataclass_stub_string_fields_serialize_correctly(self):
+        """Dataclass stubs with only string/float fields produce plain dicts."""
+        record = FedH8BankAssets(
+            week_ending="2025-01-06",
+            series_label="Total loans",
+            value_millions_usd=1234.5,
+            seasonal_adjustment="SA",
+            source_url="https://federalreserve.gov",
+            fetch_time="2025-01-06T12:00:00+00:00",
+            units="millions_usd",
+        )
+        result = _record_to_dict(record)
+        assert isinstance(result, dict)
+        assert result["week_ending"] == "2025-01-06"
+        assert result["value_millions_usd"] == 1234.5
+        assert result["fetch_time"] == "2025-01-06T12:00:00+00:00"
+
+    def test_dataclass_stub_with_timestamp_converts_to_iso_string(self):
+        """_Timestamp fetch_time in a dataclass stub is converted to an ISO string."""
+        row = _make_jolts_dataclass_row()
+        result = _record_to_dict(row)
+        assert isinstance(result, dict)
+        assert isinstance(result["fetch_time"], str)
+        assert "2025-01-06" in result["fetch_time"]
+
+    def test_dataclass_stub_all_fields_present_in_output(self):
+        """Every field of the dataclass stub appears in the serialized dict."""
+        row = _make_jolts_dataclass_row()
+        result = _record_to_dict(row)
+        for field_name in ("series_id", "period", "data_type", "industry",
+                           "level_thousands", "rate_pct", "source_url", "fetch_time"):
+            assert field_name in result, f"Missing field: {field_name}"
+
+    def test_dataclass_stub_upload_reaches_insert_rows_json(self):
+        """End-to-end: dataclass stub rows reach insert_rows_json as plain dicts."""
+        mock_client = MagicMock()
+        mock_client.insert_rows_json.return_value = []
+        rows = [_make_jolts_dataclass_row("2025-01"), _make_jolts_dataclass_row("2025-02")]
+
+        with patch("src.bq_uploader.bigquery.Client", return_value=mock_client), \
+             patch.dict(os.environ, {"BQ_PROJECT": "p", "BQ_DATASET": "d"}):
+            result = upload_rows("bls_jolts", rows)
+
+        assert result == 2
+        inserted = mock_client.insert_rows_json.call_args[0][1]
+        assert len(inserted) == 2
+        assert inserted[0]["period"] == "2025-01"
+        assert isinstance(inserted[0]["fetch_time"], str)
+
+    def test_unserializable_type_raises_type_error(self):
+        """Passing an unsupported type (not Message, not dataclass) raises TypeError."""
+        with pytest.raises(TypeError, match="Cannot serialize"):
+            _record_to_dict({"key": "value"})
+
+    def test_dataclass_stub_timestamp_none_becomes_empty_string(self):
+        """_Timestamp with _dt=None serializes to empty string rather than crashing."""
+        row = BlsJoltsRecord()
+        result = _record_to_dict(row)
+        assert isinstance(result["fetch_time"], str)
