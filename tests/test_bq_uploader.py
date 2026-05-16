@@ -14,15 +14,10 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.bq_uploader import upload_rows
-from protos.eia_petroleum_prices_pb2 import PetroleumPriceRecord
+from protos.eia_petroleum_prices_pb2 import PetroleumPriceRecord  # type: ignore[attr-defined]
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _make_proto_row(region: str = "U.S.", price: float = 3.12) -> PetroleumPriceRecord:
-    """Return a minimal PetroleumPriceRecord proto suitable for upload tests."""
     msg = PetroleumPriceRecord()
     msg.source_url = "https://www.eia.gov/test"
     msg.period_date = "2025-01-06"
@@ -33,10 +28,6 @@ def _make_proto_row(region: str = "U.S.", price: float = 3.12) -> PetroleumPrice
     msg.units = "USD/gallon"
     return msg
 
-
-# ---------------------------------------------------------------------------
-# Happy-path tests
-# ---------------------------------------------------------------------------
 
 class TestUploadRowsHappyPath:
     def test_calls_insert_rows_json_with_correct_full_table(self):
@@ -107,10 +98,6 @@ class TestUploadRowsHappyPath:
         assert result == 3
 
 
-# ---------------------------------------------------------------------------
-# Edge cases
-# ---------------------------------------------------------------------------
-
 class TestUploadRowsEdgeCases:
     def test_empty_rows_returns_zero(self):
         """Empty input must return 0 without calling insert_rows_json."""
@@ -151,10 +138,6 @@ class TestUploadRowsEdgeCases:
         assert table_arg == "proj.ds.just_table"
         assert table_arg.count(".") == 2
 
-
-# ---------------------------------------------------------------------------
-# Error / failure-mode tests
-# ---------------------------------------------------------------------------
 
 class TestUploadRowsErrorHandling:
     def test_insertion_errors_are_logged_and_do_not_raise(self, caplog):

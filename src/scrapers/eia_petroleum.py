@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 from src.bq_uploader import upload_rows
 from src.http_client import fetch
-from protos.eia_petroleum_prices_pb2 import PetroleumPriceRecord
+from protos.eia_petroleum_prices_pb2 import PetroleumPriceRecord  # type: ignore[attr-defined]
 
 SOURCE_URL = "https://www.eia.gov/dnav/pet/pet_pri_gnd_dcus_nus_w.htm"
 _UNITS = "USD/gallon"
@@ -84,11 +84,6 @@ def scrape() -> list[dict]:
 
 
 def _record_to_proto(record: dict) -> PetroleumPriceRecord:
-    """Convert a parsed record dict to a PetroleumPriceRecord proto message.
-
-    Sets fetch_time to the current UTC time. All other fields are copied
-    directly from the dict returned by ``run()``.
-    """
     msg = PetroleumPriceRecord()
     msg.source_url = record["source_url"]
     msg.period_date = record["period_date"]
