@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package scraper;
+
+message FaoFoodPriceRecord {
+  string date            = 1;  // "YYYY-MM"
+  string commodity_group = 2;
+  float  index_value     = 3;
+  string source_url      = 4;
+  string fetch_time      = 5;  // ISO-8601 UTC
+}
