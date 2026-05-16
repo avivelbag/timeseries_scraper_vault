@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package scraper;
+
+import "google/protobuf/timestamp.proto";
+
+message BLSCpiRecord {
+  string series_id = 1;
+  int32 year = 2;
+  int32 month = 3;
+  float value = 4;
+  string source_url = 5;
+  google.protobuf.Timestamp fetch_time = 6;
+  string units = 7;
+}
