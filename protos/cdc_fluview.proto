@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package scraper;
+
+message CdcFluviewRecord {
+  string week_ending_date = 1;
+  int32 year = 2;
+  int32 week = 3;
+  string region = 4;
+  float ili_percent = 5;
+  int32 total_patients = 6;
+  int32 ili_patients = 7;
+  string source_url = 8;
+  string fetch_time = 9;
+}
