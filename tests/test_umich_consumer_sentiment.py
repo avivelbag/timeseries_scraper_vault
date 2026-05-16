@@ -14,6 +14,7 @@ from protos.umich_consumer_sentiment_pb2 import (  # type: ignore[attr-defined]
 from src.scrapers.umich_consumer_sentiment import (
     _parse_month,
     _record_to_proto,
+    main,
     run,
     scrape,
     scrape_range,
@@ -267,16 +268,29 @@ class TestScrapeFunction:
         mock_resp = MagicMock()
         mock_resp.text = fixture_html
         with patch("src.scrapers.umich_consumer_sentiment.fetch", return_value=mock_resp) as mock_fetch:
-            records = scrape()
+            with patch("src.scrapers.umich_consumer_sentiment.time.sleep"):
+                records = scrape()
         mock_fetch.assert_called_once_with("http://www.sca.isr.umich.edu/")
         assert len(records) == 5
+
+    def test_scrape_sleeps_at_least_3s(self, fixture_html):
+        """scrape() must sleep ≥3 s after fetch to satisfy polite-crawl acceptance criterion."""
+        mock_resp = MagicMock()
+        mock_resp.text = fixture_html
+        with patch("src.scrapers.umich_consumer_sentiment.fetch", return_value=mock_resp):
+            with patch("src.scrapers.umich_consumer_sentiment.time.sleep") as mock_sleep:
+                scrape()
+        mock_sleep.assert_called_once()
+        sleep_arg = mock_sleep.call_args[0][0]
+        assert sleep_arg >= 3, f"Expected sleep ≥3 s, got {sleep_arg}"
 
     def test_scrape_propagates_parse_error(self):
         mock_resp = MagicMock()
         mock_resp.text = "<html><body><p>No table</p></body></html>"
         with patch("src.scrapers.umich_consumer_sentiment.fetch", return_value=mock_resp):
-            with pytest.raises(ValueError, match="No consumer sentiment table"):
-                scrape()
+            with patch("src.scrapers.umich_consumer_sentiment.time.sleep"):
+                with pytest.raises(ValueError, match="No consumer sentiment table"):
+                    scrape()
 
     def test_scrape_range_filters_by_year(self, fixture_html):
         mock_resp = MagicMock()
@@ -292,3 +306,46 @@ class TestScrapeFunction:
         with patch("src.scrapers.umich_consumer_sentiment.fetch", return_value=mock_resp):
             records = scrape_range(2020, 2025)
         assert records == []
+
+
+class TestMain:
+    def test_main_calls_upload_rows_without_date_column(self, fixture_html):
+        """main() must not pass date_column so preliminary and final for the same
+        month are both persisted — the shared uploader cannot express a composite key."""
+        mock_resp = MagicMock()
+        mock_resp.text = fixture_html
+        with patch("src.scrapers.umich_consumer_sentiment.fetch", return_value=mock_resp):
+            with patch("src.scrapers.umich_consumer_sentiment.time.sleep"):
+                with patch("src.scrapers.umich_consumer_sentiment.upload_rows", return_value=5) as mock_upload:
+                    result = main()
+        mock_upload.assert_called_once()
+        _, kwargs = mock_upload.call_args
+        assert "date_column" not in kwargs or kwargs.get("date_column") == "", (
+            "main() must not pass date_column to avoid dropping final readings"
+        )
+        assert result == 5
+
+    def test_main_preserves_both_preliminary_and_final(self, fixture_html):
+        """Both preliminary and final records reach upload_rows uncensored.
+
+        The fixture has 5 rows including at least one preliminary (May 2026) and
+        several finals. If date_column were set to survey_month, a second scrape
+        would filter out the final reading for any month already uploaded.
+        This test confirms all 5 rows are passed through.
+        """
+        mock_resp = MagicMock()
+        mock_resp.text = fixture_html
+        captured: list = []
+
+        def capture_rows(table, rows, **kw):
+            captured.extend(rows)
+            return len(rows)
+
+        with patch("src.scrapers.umich_consumer_sentiment.fetch", return_value=mock_resp):
+            with patch("src.scrapers.umich_consumer_sentiment.time.sleep"):
+                with patch("src.scrapers.umich_consumer_sentiment.upload_rows", side_effect=capture_rows):
+                    main()
+
+        reading_types = {r.reading_type for r in captured}
+        assert PRELIMINARY in reading_types
+        assert len(captured) == 5

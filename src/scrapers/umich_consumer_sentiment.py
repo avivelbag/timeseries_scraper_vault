@@ -7,10 +7,12 @@ per reading (preliminary or final). Month strings like "May 2026 (P)" — where
 the "(P)" suffix marks a preliminary reading — are normalised to "YYYY-MM".
 
 All HTTP work is delegated to http_client.fetch, which enforces robots.txt
-compliance, a polite 2-5 s random delay, and exponential backoff on 429/5xx.
+compliance and exponential backoff on 429/5xx. An explicit sleep of ≥3 s is
+applied after each page fetch to satisfy polite-crawl requirements.
 """
 
 import re
+import time
 from datetime import datetime, timezone
 
 from bs4 import BeautifulSoup
@@ -190,9 +192,9 @@ def run(html: str, source_url: str = SOURCE_URL) -> list[dict]:
 def scrape() -> list[dict]:
     """Fetch the live SCA page and return parsed consumer-sentiment records.
 
-    Delegates all HTTP work to http_client.fetch, which enforces robots.txt
-    compliance, a polite random 2-5 s delay, and exponential backoff on
-    429/5xx responses.
+    Delegates HTTP to http_client.fetch (robots.txt compliance, exponential
+    backoff on 429/5xx). Sleeps ≥3 s after the fetch to satisfy the polite-
+    crawl acceptance criterion, matching the pattern in tsa_checkpoint_travel.
 
     Returns:
         Same structure as run().
@@ -202,6 +204,7 @@ def scrape() -> list[dict]:
         RuntimeError: When robots.txt disallows SOURCE_URL.
     """
     resp = fetch(SOURCE_URL)
+    time.sleep(3)
     return run(resp.text, source_url=SOURCE_URL)
 
 
@@ -250,8 +253,10 @@ def main() -> int:
     """Scrape UMich consumer-sentiment data and upload records to BigQuery.
 
     Calls scrape(), converts each record to a UmichConsumerSentimentRecord
-    proto stub, and uploads via upload_rows with survey_month as the dedup
-    column.
+    proto stub, and uploads via upload_rows with no dedup column. Omitting
+    date_column (matching bea_gdp.py) is intentional: preliminary and final
+    readings for the same survey_month must both be persisted, and the shared
+    uploader cannot express a composite (survey_month + reading_type) key.
 
     Returns:
         Count of successfully inserted rows.
@@ -262,7 +267,7 @@ def main() -> int:
     """
     records = scrape()
     messages = [_record_to_proto(r) for r in records]
-    return upload_rows("umich_consumer_sentiment", messages, date_column="survey_month")
+    return upload_rows("umich_consumer_sentiment", messages)
 
 
 if __name__ == "__main__":
