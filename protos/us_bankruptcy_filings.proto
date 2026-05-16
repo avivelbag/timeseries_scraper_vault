@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package scraper;
+
+message UsCourtsBankruptcyRecord {
+  int32 period_year = 1;
+  int32 period_quarter = 2;
+  int32 chapter = 3;
+  int64 filings = 4;
+  string source_url = 5;
+  string fetch_time = 6;
+}
