@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package scraper;
+
+message NoaaCo2Record {
+  int32  year               = 1;
+  int32  month              = 2;
+  double decimal_year       = 3;
+  double monthly_avg_ppm    = 4;
+  double deseasonalized_ppm = 5;
+  string source_url         = 6;
+  string fetch_time         = 7;  // ISO-8601 UTC
+}
