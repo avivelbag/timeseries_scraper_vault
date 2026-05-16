@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package scraper;
+
+message FedH8BankAssets {
+  google.protobuf.Timestamp week_ending = 1;
+  string series_label = 2;
+  float value_millions_usd = 3;
+  string seasonal_adjustment = 4;
+  string source_url = 5;
+  google.protobuf.Timestamp fetch_time = 6;
+  string units = 7;
+}
