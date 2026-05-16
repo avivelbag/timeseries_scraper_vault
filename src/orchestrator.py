@@ -54,6 +54,7 @@ CADENCE_DAYS = {"daily": 1, "weekly": 7, "monthly": 28}
 # DEFAULT_CADENCE) with a warning, so a newly added scraper still runs.
 SCRAPER_CADENCE = {
     "bls_cpi": "monthly",
+    "cfnai": "monthly",
     "bls_ppi": "monthly",
     "cdc_fluview": "weekly",
     "cftc_cot": "weekly",
