@@ -1,9 +1,3 @@
-"""Tests for src/health_check.py.
-
-All tests are deterministic and offline — no live network calls, no BigQuery.
-Mock scraper modules are constructed in-process using SimpleNamespace.
-"""
-
 import os
 import sys
 from types import SimpleNamespace
@@ -18,17 +12,6 @@ FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "eia_petroleu
 
 
 def _mod(records, required_fields=None, name="mock_scraper"):
-    """Build a minimal fake scraper module for testing.
-
-    Args:
-        records: List of dicts that run() will return.
-        required_fields: Value for REQUIRED_FIELDS (omit to leave unset).
-        name: The __name__ attribute on the returned namespace.
-
-    Returns:
-        SimpleNamespace with __name__ and run() — matching the interface
-        that check() expects from a real scraper module.
-    """
     attrs = {"__name__": name, "run": lambda html: records}
     if required_fields is not None:
         attrs["REQUIRED_FIELDS"] = required_fields
@@ -36,7 +19,6 @@ def _mod(records, required_fields=None, name="mock_scraper"):
 
 
 def _record(**overrides):
-    """Return a complete, valid EIA petroleum record with optional overrides."""
     base = {
         "source_url": "https://www.eia.gov/test",
         "period_date": "2025-01-06",
@@ -48,11 +30,6 @@ def _record(**overrides):
     }
     base.update(overrides)
     return base
-
-
-# ---------------------------------------------------------------------------
-# _is_missing sentinel logic
-# ---------------------------------------------------------------------------
 
 
 class TestIsMissing:
@@ -85,11 +62,6 @@ class TestIsMissing:
         assert _is_missing(True) is False
 
 
-# ---------------------------------------------------------------------------
-# check() — ok status with the real EIA fixture
-# ---------------------------------------------------------------------------
-
-
 class TestCheckOkWithEIAFixture:
     @pytest.fixture
     def sample_html(self):
@@ -97,7 +69,6 @@ class TestCheckOkWithEIAFixture:
             return fh.read()
 
     def test_ok_result_for_valid_eia_fixture(self, sample_html):
-        """The real EIA scraper on its fixture must produce status=ok."""
         from src.scrapers import eia_petroleum
 
         result = check(eia_petroleum, sample_html)
@@ -122,11 +93,6 @@ class TestCheckOkWithEIAFixture:
         assert result.scraper_name == eia_petroleum.__name__
 
 
-# ---------------------------------------------------------------------------
-# check() — fail when run() returns an empty list
-# ---------------------------------------------------------------------------
-
-
 class TestCheckFailOnEmptyList:
     def test_fail_when_run_returns_empty_list(self):
         mod = _mod([], required_fields=["source_url", "region"])
@@ -145,11 +111,6 @@ class TestCheckFailOnEmptyList:
     def test_fail_with_no_required_fields_declared(self):
         result = check(_mod([]), "")
         assert result.status == "fail"
-
-
-# ---------------------------------------------------------------------------
-# check() — warn when a record is missing a required field
-# ---------------------------------------------------------------------------
 
 
 class TestCheckWarnOnMissingField:
@@ -187,7 +148,6 @@ class TestCheckWarnOnMissingField:
         assert set(result.missing_fields) == {"grade", "region"}
 
     def test_warn_when_any_record_has_missing_field(self):
-        """A single bad record in a multi-record batch triggers warn."""
         records = [_record(), _record(region="")]
         mod = _mod(records, required_fields=["region"])
         result = check(mod, "<html/>")
@@ -207,8 +167,8 @@ class TestCheckWarnOnMissingField:
         assert result.missing_fields == []
 
     def test_module_without_required_fields_attr_gives_ok(self):
-        """getattr fallback: missing REQUIRED_FIELDS attribute → treat as []."""
-        mod = _mod([_record()])  # no required_fields arg → not set on namespace
+        # getattr fallback: missing REQUIRED_FIELDS attribute → treat as []
+        mod = _mod([_record()])
         result = check(mod, "<html/>")
         assert result.status == "ok"
 
@@ -219,11 +179,6 @@ class TestCheckWarnOnMissingField:
         )
         result = check(mod, "<html/>")
         assert result.missing_fields == sorted(result.missing_fields)
-
-
-# ---------------------------------------------------------------------------
-# check_all() — aggregation
-# ---------------------------------------------------------------------------
 
 
 class TestCheckAll:
@@ -272,15 +227,8 @@ class TestCheckAll:
         assert [r.scraper_name for r in results] == names
 
 
-# ---------------------------------------------------------------------------
-# main() — exit-code behaviour (tested via subprocess to avoid sys.exit leaks)
-# ---------------------------------------------------------------------------
-
-
 class TestMain:
     def test_main_exits_zero_on_all_ok(self, monkeypatch):
-        """main() must not sys.exit(1) when all scrapers return ok."""
-
         def fake_check_all(scrapers):
             return [
                 HealthCheck(
@@ -294,8 +242,6 @@ class TestMain:
         monkeypatch.setattr("src.health_check.check_all", fake_check_all)
 
         import src.health_check as hc_mod
-
-        # Should not raise SystemExit
         import io
         from contextlib import redirect_stdout
 
@@ -307,7 +253,6 @@ class TestMain:
                 pytest.fail(f"main() called sys.exit({exc.code}) but expected no exit")
 
     def test_main_exits_one_on_fail(self, monkeypatch):
-        """main() must call sys.exit(1) when any scraper has status=fail."""
         import src.health_check as hc_mod
 
         def fake_check_all(scrapers):
