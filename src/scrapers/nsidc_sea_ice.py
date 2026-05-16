@@ -46,7 +46,7 @@ def _discover_data_url(html: str) -> str:
     """
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup.find_all("a", href=True):
-        href = tag["href"]
+        href = str(tag["href"])
         if "N_seaice_extent_monthly" in href:
             if href.startswith("http"):
                 return href
@@ -78,7 +78,7 @@ def parse_lines(lines: list[str]) -> list[NsidcSeaIceRecord]:
         All records in a single call share the same fetch_time timestamp.
     """
     records: list[NsidcSeaIceRecord] = []
-    fetch_time = datetime.now(timezone.utc)
+    fetch_time = datetime.now(timezone.utc).isoformat()
 
     for line in lines:
         stripped = line.strip()
@@ -102,15 +102,16 @@ def parse_lines(lines: list[str]) -> list[NsidcSeaIceRecord]:
 
         area_val = 0.0 if area <= _MISSING_SENTINEL + 1 else area
 
-        rec = NsidcSeaIceRecord(
-            year=year,
-            month=month,
-            extent_million_sq_km=extent,
-            area_million_sq_km=area_val,
-            source_url=INDEX_URL,
+        records.append(
+            NsidcSeaIceRecord(
+                year=year,
+                month=month,
+                extent_million_sq_km=extent,
+                area_million_sq_km=area_val,
+                source_url=INDEX_URL,
+                fetch_time=fetch_time,
+            )
         )
-        rec.fetch_time.FromDatetime(fetch_time)
-        records.append(rec)
 
     return records
 

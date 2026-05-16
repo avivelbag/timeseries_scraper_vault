@@ -115,12 +115,11 @@ class TestParseHappyPath:
 
     def test_fetch_time_set_on_all_records(self, records):
         for rec in records:
-            assert rec.fetch_time._dt is not None
+            assert rec.fetch_time != ""
 
     def test_all_records_share_fetch_time(self, data_lines):
         recs = parse_lines(data_lines)
-        times = {id(r.fetch_time._dt) for r in recs}
-        # All records share the same datetime object (assigned once per call)
+        times = {r.fetch_time for r in recs}
         assert len(times) == 1
 
     def test_large_input(self):
