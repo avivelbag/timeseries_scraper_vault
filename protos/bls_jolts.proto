@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package scraper;
+
+import "google/protobuf/timestamp.proto";
+
+message BlsJoltsRecord {
+  string series_id = 1;
+  string period = 2;
+  string data_type = 3;
+  string industry = 4;
+  float level_thousands = 5;
+  float rate_pct = 6;
+  string source_url = 7;
+  google.protobuf.Timestamp fetch_time = 8;
+}
