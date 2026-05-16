@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package scraper;
+
+message UsdaCropProgressRecord {
+  string report_week        = 1;  // "YYYY-MM-DD"
+  string state              = 2;
+  string crop               = 3;
+  string stage              = 4;  // set for Progress records; empty for Condition records
+  float  pct_complete       = 5;
+  string condition_category = 6;  // set for Condition records; empty for Progress records
+  float  pct_condition      = 7;
+  string source_url         = 8;
+  string fetch_time         = 9;  // ISO-8601 UTC
+}
