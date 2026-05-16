@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package scraper;
+
+message EiaNaturalGasStorageRecord {
+  string region = 1;
+  double storage_bcf = 2;
+  double year_ago_bcf = 3;
+  double five_year_avg_bcf = 4;
+  string report_date = 5;
+  string source_url = 6;
+  string fetch_time = 7;
+}
