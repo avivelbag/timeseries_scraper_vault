@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package scraper;
+
+import "google/protobuf/timestamp.proto";
+
+message UsgsStreamflowRecord {
+  string site_no = 1;
+  string site_name = 2;
+  string date = 3;
+  float discharge_cfs = 4;
+  string approval_status = 5;
+  string source_url = 6;
+  google.protobuf.Timestamp fetch_time = 7;
+}
