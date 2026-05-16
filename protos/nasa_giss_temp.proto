@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package scraper;
+
+message NasaGissTempRecord {
+  int32  year        = 1;
+  int32  month       = 2;
+  string year_month  = 3;  // "YYYY-MM"
+  float  anomaly_c   = 4;  // relative to 1951-1980 baseline, in degrees Celsius
+  string source_url  = 5;
+  string fetch_time  = 6;  // ISO-8601 UTC
+}
