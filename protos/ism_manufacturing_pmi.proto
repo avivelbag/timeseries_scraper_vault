@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package scraper;
+
+message IsmManufacturingPmiRecord {
+  string report_date = 1;
+  double pmi = 2;
+  double new_orders = 3;
+  double production = 4;
+  double employment = 5;
+  double supplier_deliveries = 6;
+  double inventories = 7;
+  double customer_inventories = 8;
+  double prices = 9;
+  double backlog_of_orders = 10;
+  double new_export_orders = 11;
+  double imports = 12;
+  string source_url = 13;
+  string fetch_time = 14;
+}
