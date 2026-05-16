@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package scraper;
+
+message FedConsumerCreditRecord {
+  string release_date = 1;
+  string series_name = 2;
+  double amount_billions_usd = 3;
+  bool seasonally_adjusted = 4;
+  string source_url = 5;
+  string fetch_time = 6;
+}
