@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package scraper;
+
+import "google/protobuf/timestamp.proto";
+
+message NsidcSeaIceRecord {
+  int32 year = 1;
+  int32 month = 2;
+  double extent_million_sq_km = 3;
+  double area_million_sq_km = 4;
+  string source_url = 5;
+  google.protobuf.Timestamp fetch_time = 6;
+}
