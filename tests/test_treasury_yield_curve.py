@@ -17,6 +17,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.scrapers.treasury_yield_curve import (
     LABEL_TO_FIELD,
     REQUIRED_FIELDS,
+    _header_to_field,
+    _iter_months,
+    backfill,
     run,
     scrape,
 )
@@ -265,3 +268,150 @@ class TestScrapeFunction:
         expected_url = mock_fetch.call_args[0][0]
         for record in records:
             assert record["source_url"] == expected_url
+
+
+class TestHeaderDrift:
+    """Header label variations the Treasury site might emit (layout drift)."""
+
+    def test_canonical_labels_resolve(self):
+        for label, field in LABEL_TO_FIELD.items():
+            assert _header_to_field(label) == field
+
+    def test_hyphenated_label_resolves(self):
+        assert _header_to_field("10-Yr") == "maturity_10y"
+        assert _header_to_field("1-Mo") == "maturity_1m"
+        assert _header_to_field("30-Yr") == "maturity_30y"
+
+    def test_no_space_label_resolves(self):
+        assert _header_to_field("10Yr") == "maturity_10y"
+        assert _header_to_field("1Mo") == "maturity_1m"
+        assert _header_to_field("5Yr") == "maturity_5y"
+
+    def test_uppercase_label_resolves(self):
+        assert _header_to_field("10 YR") == "maturity_10y"
+        assert _header_to_field("1 MO") == "maturity_1m"
+
+    def test_unknown_label_returns_none(self):
+        assert _header_to_field("Unknown") is None
+        assert _header_to_field("") is None
+        assert _header_to_field("4 Mo") is None
+
+    def test_run_parses_hyphenated_headers(self):
+        html = """
+        <html><body><table>
+          <tr><th>Date</th><th>1-Mo</th><th>10-Yr</th></tr>
+          <tr><td>05/01/2025</td><td>5.31</td><td>4.40</td></tr>
+        </table></body></html>
+        """
+        records = run(html)
+        assert len(records) == 1
+        assert records[0]["maturity_1m"] == 5.31
+        assert records[0]["maturity_10y"] == 4.40
+
+    def test_run_parses_compact_headers(self):
+        html = """
+        <html><body><table>
+          <tr><th>Date</th><th>1Mo</th><th>10Yr</th><th>30Yr</th></tr>
+          <tr><td>05/02/2025</td><td>5.32</td><td>4.41</td><td>4.62</td></tr>
+        </table></body></html>
+        """
+        records = run(html)
+        assert len(records) == 1
+        assert records[0]["maturity_1m"] == 5.32
+        assert records[0]["maturity_10y"] == 4.41
+        assert records[0]["maturity_30y"] == 4.62
+
+    def test_run_mixed_canonical_and_drifted_headers(self):
+        html = """
+        <html><body><table>
+          <tr><th>Date</th><th>1 Mo</th><th>10-Yr</th></tr>
+          <tr><td>05/03/2025</td><td>5.30</td><td>4.39</td></tr>
+        </table></body></html>
+        """
+        records = run(html)
+        assert len(records) == 1
+        assert records[0]["maturity_1m"] == 5.30
+        assert records[0]["maturity_10y"] == 4.39
+
+
+class TestIterMonths:
+    def test_single_month(self):
+        assert list(_iter_months("2025-01", "2025-01")) == ["202501"]
+
+    def test_two_months_same_year(self):
+        assert list(_iter_months("2025-01", "2025-02")) == ["202501", "202502"]
+
+    def test_year_boundary(self):
+        result = list(_iter_months("2024-12", "2025-02"))
+        assert result == ["202412", "202501", "202502"]
+
+    def test_full_year(self):
+        result = list(_iter_months("2024-01", "2024-12"))
+        assert len(result) == 12
+        assert result[0] == "202401"
+        assert result[-1] == "202412"
+
+    def test_end_before_start_yields_nothing(self):
+        assert list(_iter_months("2025-03", "2025-01")) == []
+
+    def test_multi_year_span(self):
+        result = list(_iter_months("2023-11", "2024-01"))
+        assert result == ["202311", "202312", "202401"]
+
+
+class TestBackfill:
+    def _make_fake_resp(self, date_str: str, rate: str = "4.40") -> MagicMock:
+        fake = MagicMock(spec=requests.Response)
+        fake.text = f"""
+        <html><body><table>
+          <tr><th>Date</th><th>10 Yr</th></tr>
+          <tr><td>{date_str}</td><td>{rate}</td></tr>
+        </table></body></html>
+        """
+        return fake
+
+    def test_backfill_single_month_returns_records(self):
+        fake_resp = self._make_fake_resp("01/15/2024")
+        with patch("src.scrapers.treasury_yield_curve.fetch", return_value=fake_resp):
+            records = backfill("2024-01", "2024-01")
+        assert len(records) == 1
+        assert records[0]["date"] == "2024-01-15"
+
+    def test_backfill_two_months_calls_fetch_twice(self):
+        fake_resp = self._make_fake_resp("01/15/2024")
+        with patch("src.scrapers.treasury_yield_curve.fetch", return_value=fake_resp) as mock_fetch:
+            backfill("2024-01", "2024-02")
+        assert mock_fetch.call_count == 2
+
+    def test_backfill_aggregates_records_from_all_months(self):
+        jan_resp = self._make_fake_resp("01/15/2024", "4.20")
+        feb_resp = self._make_fake_resp("02/15/2024", "4.25")
+        with patch("src.scrapers.treasury_yield_curve.fetch", side_effect=[jan_resp, feb_resp]):
+            records = backfill("2024-01", "2024-02")
+        assert len(records) == 2
+        dates = {r["date"] for r in records}
+        assert "2024-01-15" in dates
+        assert "2024-02-15" in dates
+
+    def test_backfill_skips_month_on_fetch_error(self):
+        good_resp = self._make_fake_resp("03/15/2024", "4.30")
+        with patch(
+            "src.scrapers.treasury_yield_curve.fetch",
+            side_effect=[RuntimeError("robots.txt disallows"), good_resp],
+        ):
+            records = backfill("2024-02", "2024-03")
+        assert len(records) == 1
+        assert records[0]["date"] == "2024-03-15"
+
+    def test_backfill_end_before_start_returns_empty(self):
+        with patch("src.scrapers.treasury_yield_curve.fetch") as mock_fetch:
+            records = backfill("2024-03", "2024-01")
+        assert records == []
+        mock_fetch.assert_not_called()
+
+    def test_backfill_year_boundary(self):
+        dec_resp = self._make_fake_resp("12/15/2023", "3.90")
+        jan_resp = self._make_fake_resp("01/15/2024", "4.00")
+        with patch("src.scrapers.treasury_yield_curve.fetch", side_effect=[dec_resp, jan_resp]):
+            records = backfill("2023-12", "2024-01")
+        assert len(records) == 2
