@@ -14,7 +14,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 from src.bq_uploader import upload_rows
-from src.http_client import fetch
+from src.scrapers.http_client import fetch
 from protos.bls_ppi_pb2 import BLSPpiRecord  # type: ignore[attr-defined]
 
 LANDING_URL = "https://www.bls.gov/ppi/tables.htm"

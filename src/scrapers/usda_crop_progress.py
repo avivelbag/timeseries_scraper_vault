@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 
 from src.bq_uploader import upload_rows
-from src.http_client import fetch
+from src.scrapers.http_client import fetch
 from protos.usda_crop_progress_pb2 import UsdaCropProgressRecord  # type: ignore[attr-defined]
 
 SOURCE_URL = "https://www.nass.usda.gov/Charts_and_Maps/Crop_Progress_&_Condition/"

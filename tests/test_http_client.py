@@ -8,7 +8,7 @@ import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.http_client import fetch, RobotsDisallowed, AGENT, _robot_cache
+from src.scrapers.http_client import fetch, AGENT, _robots
 
 
 def _make_response(status_code: int) -> MagicMock:
@@ -24,9 +24,9 @@ def _make_response(status_code: int) -> MagicMock:
 @pytest.fixture(autouse=True)
 def clear_robot_cache():
     """Isolate each test from cached robots.txt state."""
-    _robot_cache.clear()
+    _robots.cache_clear()
     yield
-    _robot_cache.clear()
+    _robots.cache_clear()
 
 
 @pytest.fixture()
@@ -34,13 +34,13 @@ def robots_allow():
     """Patch _robots to always allow any URL."""
     rp = MagicMock(spec=urllib.robotparser.RobotFileParser)
     rp.can_fetch.return_value = True
-    with patch("src.http_client._robots", return_value=rp):
+    with patch("src.scrapers.http_client._robots", return_value=rp):
         yield rp
 
 
 @pytest.fixture()
 def no_sleep():
-    with patch("src.http_client.time.sleep") as mock_sleep:
+    with patch("src.scrapers.http_client.time.sleep") as mock_sleep:
         yield mock_sleep
 
 
@@ -48,16 +48,16 @@ class TestRobotsBlocking:
     def test_raises_when_disallowed(self, no_sleep):
         rp = MagicMock(spec=urllib.robotparser.RobotFileParser)
         rp.can_fetch.return_value = False
-        with patch("src.http_client._robots", return_value=rp):
-            with pytest.raises(RobotsDisallowed) as exc_info:
+        with patch("src.scrapers.http_client._robots", return_value=rp):
+            with pytest.raises(RuntimeError) as exc_info:
                 fetch("https://example.com/private/data")
         assert "https://example.com/private/data" in str(exc_info.value)
 
     def test_checks_correct_agent_and_url(self, no_sleep):
         rp = MagicMock(spec=urllib.robotparser.RobotFileParser)
         rp.can_fetch.return_value = False
-        with patch("src.http_client._robots", return_value=rp):
-            with pytest.raises(RobotsDisallowed):
+        with patch("src.scrapers.http_client._robots", return_value=rp):
+            with pytest.raises(RuntimeError):
                 fetch("https://example.com/blocked")
         rp.can_fetch.assert_called_once_with(AGENT, "https://example.com/blocked")
 
@@ -65,8 +65,8 @@ class TestRobotsBlocking:
         rp = MagicMock(spec=urllib.robotparser.RobotFileParser)
         rp.can_fetch.return_value = False
         session = MagicMock(spec=requests.Session)
-        with patch("src.http_client._robots", return_value=rp):
-            with pytest.raises(RobotsDisallowed):
+        with patch("src.scrapers.http_client._robots", return_value=rp):
+            with pytest.raises(RuntimeError):
                 fetch("https://example.com/blocked", session=session)
         session.get.assert_not_called()
 
@@ -99,11 +99,23 @@ class TestSuccessfulFetch:
         session.headers = {}
         session.get.return_value = resp_200
 
-        with patch("src.http_client.time.sleep") as mock_sleep:
-            with patch("src.http_client.random.uniform", return_value=3.0):
+        with patch("src.scrapers.http_client.time.sleep") as mock_sleep:
+            with patch("src.scrapers.http_client.random.uniform", return_value=3.0):
                 fetch("https://example.com/data", session=session)
 
         mock_sleep.assert_any_call(3.0)
+
+    def test_min_max_delay_passed_to_uniform(self, robots_allow, no_sleep):
+        """min_delay and max_delay are forwarded to random.uniform."""
+        resp_200 = _make_response(200)
+        session = MagicMock(spec=requests.Session)
+        session.headers = {}
+        session.get.return_value = resp_200
+
+        with patch("src.scrapers.http_client.random.uniform", return_value=1.5) as mock_uniform:
+            fetch("https://example.com/data", session=session, min_delay=1.0, max_delay=2.0)
+
+        mock_uniform.assert_called_once_with(1.0, 2.0)
 
     def test_kwargs_forwarded_to_get(self, robots_allow, no_sleep):
         resp_200 = _make_response(200)
@@ -114,6 +126,11 @@ class TestSuccessfulFetch:
         fetch("https://example.com/data", session=session, timeout=10)
 
         session.get.assert_called_once_with("https://example.com/data", timeout=10)
+
+    def test_user_agent_constant(self):
+        """AGENT matches the project's declared scraper identity."""
+        assert "TimeSeriesBot/1.0" in AGENT
+        assert "github.com/avivalbeg/circle-jerk2" in AGENT
 
 
 class TestRetryBehaviour:
@@ -147,9 +164,9 @@ class TestRetryBehaviour:
         session.headers = {}
         session.get.side_effect = [resp_429, resp_200]
 
-        with patch("src.http_client.time.sleep") as mock_sleep:
-            with patch("src.http_client.random.uniform", return_value=2.5):
-                with patch("src.http_client.random.random", return_value=0.5):
+        with patch("src.scrapers.http_client.time.sleep") as mock_sleep:
+            with patch("src.scrapers.http_client.random.uniform", return_value=2.5):
+                with patch("src.scrapers.http_client.random.random", return_value=0.5):
                     fetch("https://example.com/data", session=session)
 
         # First sleep is the pre-request polite delay; second is the backoff
@@ -171,7 +188,7 @@ class TestRetryBehaviour:
 
     def test_5xx_codes_all_trigger_retry(self, robots_allow, no_sleep):
         for code in (500, 502, 503, 504):
-            _robot_cache.clear()
+            _robots.cache_clear()
             resp_err = _make_response(code)
             resp_200 = _make_response(200)
             session = MagicMock(spec=requests.Session)
@@ -192,3 +209,20 @@ class TestRetryBehaviour:
             fetch("https://example.com/missing", session=session)
 
         assert session.get.call_count == 1
+
+    def test_backoff_cap_at_120s(self, robots_allow, no_sleep):
+        """Backoff delay is capped at 120 s even after many retries."""
+        responses = [_make_response(429)] * 4 + [_make_response(200)]
+        session = MagicMock(spec=requests.Session)
+        session.headers = {}
+        session.get.side_effect = responses
+
+        sleep_calls = []
+        with patch("src.scrapers.http_client.time.sleep", side_effect=lambda d: sleep_calls.append(d)):
+            with patch("src.scrapers.http_client.random.uniform", return_value=2.0):
+                with patch("src.scrapers.http_client.random.random", return_value=0.0):
+                    fetch("https://example.com/data", session=session)
+
+        # Skip the first sleep (pre-request delay); check backoff sleeps are <= 120
+        backoff_sleeps = sleep_calls[1:]
+        assert all(s <= 120 for s in backoff_sleeps)
