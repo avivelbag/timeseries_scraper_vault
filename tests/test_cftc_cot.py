@@ -1,9 +1,3 @@
-"""Tests for src/scrapers/cftc_cot.py.
-
-All tests use the static HTML fixture at tests/fixtures/cftc_cot_sample.html
-or inline HTML strings.  No live network calls are made.
-"""
-
 import os
 import sys
 from datetime import datetime
@@ -227,7 +221,6 @@ class TestEdgeCases:
         assert parse_html(html) == []
 
     def test_large_input_all_parsed(self):
-        """50 identical commodity blocks all produce records."""
         block = (
             "CORN - CHICAGO BOARD OF TRADE                                             002602\n"
             "  ALL                                                                      456,789   234,567    45,678   789,012   901,234 1,291,479 1,181,479   89,012   15,678\n"
@@ -533,6 +526,9 @@ class TestScrapeRange:
             assert r.noncommercial_long == y.noncommercial_long
 
     def test_scrape_range_all_years_skipped_returns_empty(self):
-        with patch("src.scrapers.cftc_cot.fetch", side_effect=RuntimeError("down")):
+        with patch(
+            "src.scrapers.cftc_cot.fetch",
+            side_effect=requests.ConnectionError("down"),
+        ):
             records = scrape_range(2020, 2022)
         assert records == []
