@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package scraper;
+
+message FdicBankFailureRecord {
+  int32 cert = 1;
+  string institution_name = 2;
+  string city = 3;
+  string state = 4;
+  string failure_date = 5;
+  optional double approx_assets_usd_millions = 6;
+  optional double approx_deposits_usd_millions = 7;
+  optional double estimated_loss_usd_millions = 8;
+  string source_url = 9;
+  string fetch_time = 10;
+}
