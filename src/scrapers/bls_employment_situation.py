@@ -88,8 +88,8 @@ def _build_header_grid(thead_rows: list[Tag]) -> dict[tuple[int, int], str]:
         for cell in tr.find_all(["th", "td"]):
             while (row_idx, col_idx) in grid:
                 col_idx += 1
-            rowspan = int(cell.get("rowspan") or 1)
-            colspan = int(cell.get("colspan") or 1)
+            rowspan = int(str(cell.get("rowspan") or 1))
+            colspan = int(str(cell.get("colspan") or 1))
             text = cell.get_text(separator=" ", strip=True)
             for r in range(rowspan):
                 for c in range(colspan):
