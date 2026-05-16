@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package scraper;
+
+message FedZ1Record {
+  string period_date = 1;
+  string series_name = 2;
+  double value_billions_usd = 3;
+  string source_url = 4;
+  string fetch_time = 5;
+}
