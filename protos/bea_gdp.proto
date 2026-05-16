@@ -2,12 +2,14 @@ syntax = "proto3";
 
 package scraper;
 
+import "google/protobuf/timestamp.proto";
+
 message GdpRecord {
   string period_date = 1;
   string component = 2;
   double value_billions_usd = 3;
   double pct_change_annualized = 4;
   string source_url = 5;
-  string fetch_time = 6;
+  google.protobuf.Timestamp fetch_time = 6;
   int32 schema_version = 7;
 }

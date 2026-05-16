@@ -61,8 +61,8 @@ def _build_col_info(thead: Tag | None) -> tuple[int, list[str | None]]:
 
     for cell in year_row.find_all(["th", "td"]):
         text = cell.get_text(strip=True)
-        colspan = int(cell.get("colspan", 1))
-        rowspan = int(cell.get("rowspan", 1))
+        colspan = int(str(cell.get("colspan") or 1))
+        rowspan = int(str(cell.get("rowspan") or 1))
         if rowspan > 1:
             n_skip += colspan
         elif re.match(r"^\d{4}$", text):
@@ -133,7 +133,7 @@ def _clean_component(text: str) -> str:
     Returns:
         Component name with all leading/trailing whitespace and \\xa0 removed.
     """
-    return text.replace("\xa0", " ").replace(" ", " ").strip()
+    return text.replace("\xa0", " ").strip()
 
 
 def _clean_value(text: str) -> float | None:
