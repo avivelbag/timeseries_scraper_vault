@@ -311,7 +311,7 @@ def _extract_release_links(html: str, base_url: str = BASE_URL) -> list[tuple[st
     seen_urls: set[str] = set()
 
     for a in soup.find_all("a", href=True):
-        href: str = a["href"]
+        href = str(a["href"])
         href_lower = href.lower()
         if "weekly-applications-survey" not in href_lower and "mortgage-applications" not in href_lower:
             continue
