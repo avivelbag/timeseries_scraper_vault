@@ -1,55 +1,28 @@
-"""CFTC Commitments of Traders (COT) Legacy Futures-Only scraper.
-
-Fetches the weekly Legacy Futures-Only COT report for the CME Group from
-the CFTC website and parses the fixed-width pre-formatted HTML page into
-structured CotRecord messages.
-
-The CFTC page embeds the COT data in a <pre> block.  Each commodity occupies
-two lines: a header line carrying the commodity name and a six-digit contract
-market code, followed by an "ALL" data line with nine whitespace-separated
-numbers (non-comm long/short/spreads, comm long/short, total long/short,
-non-rep long/short).  Spreads are at index 2 and are intentionally skipped.
-
-Each scrape covers only the current reporting week; historical backfill is
-out of scope for this implementation.
-"""
-
+import logging
 import re
 from datetime import datetime, timezone
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from src.bq_uploader import upload_rows
 from src.scrapers.http_client import fetch
 from protos.cftc_cot_pb2 import CotRecord  # type: ignore[attr-defined]
+import requests
 
 SOURCE_URL = "https://www.cftc.gov/dea/futures/deacmesf.htm"
 
-# Matches a commodity header line: starts with an uppercase letter, ends with
-# a 6-digit CFTC contract market code, padded by 3+ spaces before the code.
+HISTORICAL_URL_TEMPLATE = "https://www.cftc.gov/dea/futures/deacmesf{year}.htm"
+
 _COMMODITY_RE = re.compile(r"^([A-Z][A-Z0-9 ,.()/&'-]+?)\s{3,}(\d{6})\s*$")
 
-# Matches the "ALL" data line that follows each commodity header.
 _ALL_LINE_RE = re.compile(r"^\s+ALL\s")
 
-# Matches "As of <Weekday>, <Month> <Day>, <Year>" in page headings.
 _DATE_RE = re.compile(r"As of \w+,\s+(\w+ \d+,\s*\d{4})", re.IGNORECASE)
+
+_log = logging.getLogger(__name__)
 
 
 def _extract_report_date(soup: BeautifulSoup) -> str:
-    """Extract the report date from the page <h2> tags or <title>.
-
-    Searches <h2> tags first (the CFTC page typically places the date in an
-    <h2>), then falls back to the <title> element.  Expects a phrase like
-    "As of Tuesday, January 14, 2025" and returns the date in YYYY-MM-DD
-    format.
-
-    Args:
-        soup: Parsed BeautifulSoup tree of the CFTC COT page.
-
-    Returns:
-        ISO date string YYYY-MM-DD, or empty string if the pattern is absent.
-    """
     candidates = [tag.get_text(" ", strip=True) for tag in soup.find_all("h2")]
     title_tag = soup.find("title")
     if title_tag:
@@ -67,40 +40,19 @@ def _extract_report_date(soup: BeautifulSoup) -> str:
     return ""
 
 
-def parse_html(html: str) -> list[CotRecord]:
-    """Parse the CFTC COT HTML page into a list of CotRecord messages.
+def _find_pre_with_data(soup: BeautifulSoup) -> Tag | None:
+    for pre in soup.find_all("pre"):
+        if any(_COMMODITY_RE.match(line) for line in pre.get_text().splitlines()):
+            return pre
+    return None
 
-    Finds the <pre> block in the page, scans line by line, and pairs each
-    commodity header line (NAME padded to a 6-digit code) with the subsequent
-    "ALL" data line that holds 9 comma-formatted integers.
 
-    Column mapping within the "ALL" line (0-indexed, commas stripped):
-      0  -> noncommercial_long
-      1  -> noncommercial_short
-      2  -> spreads (intentionally skipped)
-      3  -> commercial_long
-      4  -> commercial_short
-      5  -> total_reportable_long
-      6  -> total_reportable_short
-      7  -> nonreportable_long
-      8  -> nonreportable_short
-
-    Lines with fewer than 9 numbers are silently skipped.  A pending commodity
-    header is cleared when a new commodity header is found, ensuring mismatched
-    pairs do not produce corrupt records.
-
-    Args:
-        html: Raw HTML string from the CFTC COT page.
-
-    Returns:
-        List of CotRecord instances, one per successfully parsed commodity row.
-        Returns an empty list when no <pre> block is present.
-    """
+def parse_html(html: str, source_url: str = SOURCE_URL) -> list[CotRecord]:
     soup = BeautifulSoup(html, "lxml")
     report_date = _extract_report_date(soup)
     fetch_time = datetime.now(timezone.utc).isoformat()
 
-    pre = soup.find("pre")
+    pre = _find_pre_with_data(soup)
     if not pre:
         return []
 
@@ -133,7 +85,7 @@ def parse_html(html: str) -> list[CotRecord]:
                         total_reportable_short=nums[6],
                         nonreportable_long=nums[7],
                         nonreportable_short=nums[8],
-                        source_url=SOURCE_URL,
+                        source_url=source_url,
                         fetch_time=fetch_time,
                     )
                 )
@@ -144,25 +96,27 @@ def parse_html(html: str) -> list[CotRecord]:
 
 
 def scrape() -> list[CotRecord]:
-    """Fetch the current CFTC COT page and return parsed records.
-
-    Delegates to src.http_client.fetch, which checks robots.txt, sleeps 2–5 s
-    before the first request (satisfying the ≥3 s average polite delay), and
-    retries with exponential backoff on 429/5xx responses.
-
-    Returns:
-        List of CotRecord instances for the current reporting week.
-    """
     resp = fetch(SOURCE_URL)
     return parse_html(resp.text)
 
 
-def main() -> int:
-    """Scrape CFTC COT data and upload records to BigQuery.
+def scrape_year(year: int) -> list[CotRecord]:
+    url = HISTORICAL_URL_TEMPLATE.format(year=year)
+    resp = fetch(url)
+    return parse_html(resp.text, source_url=url)
 
-    Returns:
-        Count of rows successfully inserted.
-    """
+
+def scrape_range(start_year: int, end_year: int) -> list[CotRecord]:
+    all_records: list[CotRecord] = []
+    for year in range(start_year, end_year + 1):
+        try:
+            all_records.extend(scrape_year(year))
+        except requests.RequestException as exc:
+            _log.warning("skipping year %d: %s", year, exc)
+    return all_records
+
+
+def main() -> int:
     records = scrape()
     return upload_rows("cftc_cot", records, date_column="report_date")
 
