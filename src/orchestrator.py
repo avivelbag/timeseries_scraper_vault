@@ -53,6 +53,7 @@ CADENCE_DAYS = {"daily": 1, "weekly": 7, "monthly": 28}
 # schedule.  Scrapers not listed here default to "weekly" (see
 # DEFAULT_CADENCE) with a warning, so a newly added scraper still runs.
 SCRAPER_CADENCE = {
+    "baker_hughes_rig_count": "weekly",
     "bls_cpi": "monthly",
     "cfnai": "monthly",
     "bls_ppi": "monthly",
