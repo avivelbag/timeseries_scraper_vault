@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package scraper;
+
+import "google/protobuf/timestamp.proto";
+
+message DroughtRecord {
+  string release_date = 1;  // "YYYY-MM-DD"
+  string region       = 2;
+  float  d0_percent   = 3;
+  float  d1_percent   = 4;
+  float  d2_percent   = 5;
+  float  d3_percent   = 6;
+  float  d4_percent   = 7;
+  string source_url   = 8;
+  google.protobuf.Timestamp fetch_time = 9;
+}
