@@ -15,6 +15,16 @@ from protos.eia_petroleum_prices_pb2 import PetroleumPriceRecord  # type: ignore
 SOURCE_URL = "https://www.eia.gov/dnav/pet/pet_pri_gnd_dcus_nus_w.htm"
 _UNITS = "USD/gallon"
 
+REQUIRED_FIELDS: list[str] = [
+    "source_url",
+    "period_date",
+    "product",
+    "region",
+    "price_usd_per_gallon",
+    "grade",
+    "units",
+]
+
 
 def run(html: str) -> list[dict]:
     """Parse EIA petroleum price HTML into a list of price records.
