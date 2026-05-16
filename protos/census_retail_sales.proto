@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package scraper;
+
+message CensusRetailSalesRecord {
+  string series_name         = 1;  // NAICS kind-of-business label
+  string period_date         = 2;  // YYYY-MM-01 (first day of reported month)
+  double sales_millions_usd  = 3;  // Seasonally adjusted sales, millions USD
+  double month_over_month_pct = 4; // MoM % change; 0 when not available
+  double year_over_year_pct  = 5;  // YoY % change; 0 when not available
+  bool   revised             = 6;  // True when estimate is marked (r) in source
+  string source_url          = 7;
+  string fetch_time          = 8;
+}
