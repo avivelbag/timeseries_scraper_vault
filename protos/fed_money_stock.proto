@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package scraper;
+
+message FedMoneyStockRecord {
+  string series_date = 1;
+  float m1_seasonally_adjusted_billions = 2;
+  float m2_seasonally_adjusted_billions = 3;
+  string source_url = 4;
+  string fetch_time = 5;
+}
