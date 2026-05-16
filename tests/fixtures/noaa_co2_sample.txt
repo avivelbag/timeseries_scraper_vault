@@ -1,0 +1,41 @@
+# --------------------------------------------------------------------
+# USE OF NOAA GML DATA
+#
+# These data are made freely available to the public and the scientific
+# community in the belief that their wide dissemination will lead to
+# greater understanding and new scientific insights. To ensure that GML
+# receives fair credit for their work please include relevant citation
+# text in publications. We encourage users to contact the data providers,
+# who can provide detailed information about the measurements and
+# scientific insight.  In cases where the data are central to a
+# publication, co-authorship for data providers may be appropriate.
+#
+# Contact:  Pieter Tans (pieter.tans@noaa.gov)
+#           Kirk Thoning (kirk.w.thoning@noaa.gov)
+#
+# File: co2_mm_mlo.txt
+# Site: Mauna Loa Observatory, Hawaii
+# Latitude:   19.5362 N
+# Longitude: 155.5763 W
+# Elevation:   3397.0 masl
+#
+# Columns:
+# - year: calendar year
+# - month: month of year
+# - decimal_year: year expressed as a decimal
+# - monthly_average: mean CO2 mole fraction in ppm
+# - interpolated: interpolated value for months with missing data
+# - trend: seasonally corrected value (deseasonalized)
+# - #days: number of days contributing to monthly average (-1 indicates missing)
+#
+# yr  mon     decimal_year   average  interpolated    trend  #days
+1958   3      1958.2083       315.71       315.71     314.62    -1
+1958   4      1958.2917       317.45       317.45     315.29    -1
+1958   5      1958.3750       317.50       317.50     314.71    -1
+1958   6      1958.4583       -99.99       317.10     314.85    -1
+1958   7      1958.5417       315.86       315.86     314.98    -1
+1959   1      1959.0417       315.58       315.58     315.27    -1
+1959   2      1959.1250       316.49       316.49     315.35    -1
+2023  10      2023.7917       418.56       418.56     415.83    28
+2023  11      2023.8750       419.13       419.13     416.59    28
+2023  12      2023.9583       419.40       419.40     416.79    31
