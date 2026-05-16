@@ -70,10 +70,12 @@ def _extract_station_name(
 ) -> str:
     """Return the station's display name extracted from the page or a fallback.
 
-    Searches heading and title tags for the station_id; when found, strips
+    Searches h1/h2/h3 heading tags for the station_id; when found, strips
     the ID prefix (e.g. "8518750 - ") and returns the remainder as the name.
     Falls back to the provided dict if the station_id appears in none of the
-    heading tags.
+    heading tags.  Title tags are intentionally excluded: NOAA page titles
+    carry the ID on the right side of the dash ("Page - ID"), which causes
+    split("-", 1)[1] to resolve to the bare ID rather than the name.
 
     Args:
         soup: Parsed BeautifulSoup of the station HTML page.
@@ -83,7 +85,7 @@ def _extract_station_name(
     Returns:
         Station name string.
     """
-    for tag in soup.find_all(["h1", "h2", "h3", "title"]):
+    for tag in soup.find_all(["h1", "h2", "h3"]):
         text = tag.get_text(" ", strip=True)
         if station_id in text:
             parts = text.split("-", 1)

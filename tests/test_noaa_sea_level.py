@@ -249,6 +249,30 @@ class TestStationNameExtraction:
         name = _extract_station_name(soup, "9999999", {})
         assert name == "9999999"
 
+    def test_title_tag_does_not_override_heading(self):
+        """Title carries 'Station Home Page - 8518750'; heading has the real name.
+
+        The old code matched the title first (document order) and returned the
+        bare station ID.  The fix restricts search to h1/h2/h3 only.
+        """
+        html = (
+            "<html><head><title>Station Home Page - 8518750</title></head>"
+            "<body><h2>8518750 - The Battery, New York</h2></body></html>"
+        )
+        soup = BeautifulSoup(html, "lxml")
+        name = _extract_station_name(soup, "8518750", _DEFAULT_STATIONS)
+        assert name == "The Battery, New York"
+
+    def test_title_only_page_falls_back_to_dict(self):
+        """When only a title tag is present (no heading), fall back to dict."""
+        html = (
+            "<html><head><title>Station Home Page - 8518750</title></head>"
+            "<body></body></html>"
+        )
+        soup = BeautifulSoup(html, "lxml")
+        name = _extract_station_name(soup, "8518750", _DEFAULT_STATIONS)
+        assert name == "The Battery, New York"
+
 
 class TestScrapeStation:
     def test_returns_records_on_success(self, fixture_html):
@@ -257,6 +281,15 @@ class TestScrapeStation:
         with patch("src.scrapers.noaa_sea_level.fetch", return_value=fake_resp):
             records = scrape_station(STATION_ID)
         assert len(records) == 34
+
+    def test_station_name_extracted_from_fixture(self, fixture_html):
+        """Regression: fixture has a <title> before the <h2>; name must be the
+        human-readable label from the heading, not the bare station ID."""
+        fake_resp = MagicMock(spec=requests.Response)
+        fake_resp.text = fixture_html
+        with patch("src.scrapers.noaa_sea_level.fetch", return_value=fake_resp):
+            records = scrape_station(STATION_ID)
+        assert all(r.station_name == STATION_NAME for r in records)
 
     def test_returns_empty_list_on_fetch_error(self):
         with patch(
