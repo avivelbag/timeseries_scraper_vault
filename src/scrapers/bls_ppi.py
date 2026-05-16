@@ -165,11 +165,11 @@ def run(html: str, source_url: str = LANDING_URL) -> list[dict]:
 
         month_col_map: dict[int, int] = {}
         for row in header_rows:
-            cells = row.find_all(["th", "td"])
-            for cell in cells:
+            header_cells = row.find_all(["th", "td"])
+            for cell in header_cells:
                 for sup in cell.find_all("sup"):
                     sup.decompose()
-            headers = [c.get_text(strip=True) for c in cells]
+            headers = [c.get_text(strip=True) for c in header_cells]
             col_map: dict[int, int] = {}
             for idx, h in enumerate(headers):
                 if h in _SKIP_COLUMNS:
@@ -265,7 +265,7 @@ def _find_table_links(html: str, base_url: str = LANDING_URL) -> list[str]:
     for a in soup.find_all("a", href=True):
         text = a.get_text(strip=True).lower()
         if any(kw in text for kw in _TABLE_LINK_TEXTS):
-            href = urljoin(base_url, a["href"])
+            href = urljoin(base_url, str(a["href"]))
             if href not in seen:
                 seen.add(href)
                 links.append(href)
