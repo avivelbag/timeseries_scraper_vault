@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package scraper;
+
+message BLSEmploymentRecord {
+  int32 period_year = 1;
+  int32 period_month = 2;
+  string series_id = 3;
+  string series_label = 4;
+  double value = 5;
+  string units = 6;
+  bool preliminary = 7;
+  string source_url = 8;
+  string fetch_time = 9;
+}
