@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package scraper;
+
+message PhillyFedManufacturingRecord {
+  string report_date = 1;
+  string indicator_name = 2;
+  double current_index = 3;
+  double prior_month_index = 4;
+  double six_month_forecast = 5;
+  string source_url = 6;
+  string fetch_time = 7;
+}
