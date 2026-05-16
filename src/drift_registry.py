@@ -1,20 +1,16 @@
-"""Registry of all scrapers for schema drift detection.
-
-Each entry maps a scraper module to its live URL and proto class.
-Pass REGISTRY to run_all_checks() to check all scrapers in sequence.
-"""
+"""Registry mapping each scraper module to its live URL and proto class."""
 
 from datetime import datetime, timezone
 
-from protos.bls_cpi_pb2 import BLSCpiRecord
-from protos.eia_electricity_pb2 import EiaElectricityRecord
-from protos.eia_natural_gas_pb2 import EiaNaturalGasRecord
-from protos.eia_petroleum_prices_pb2 import PetroleumPriceRecord
-from protos.fao_food_price_index_pb2 import FaoFoodPriceRecord
-from protos.fed_h15_rates_pb2 import FedH15Record
-from protos.treasury_yield_curve_pb2 import TreasuryYieldRecord
-from protos.usda_crop_progress_pb2 import UsdaCropProgressRecord
-from protos.usgs_streamflow_pb2 import UsgsStreamflowRecord
+from protos.bls_cpi_pb2 import BLSCpiRecord  # type: ignore[attr-defined]
+from protos.eia_electricity_pb2 import EiaElectricityRecord  # type: ignore[attr-defined]
+from protos.eia_natural_gas_pb2 import EiaNaturalGasRecord  # type: ignore[attr-defined]
+from protos.eia_petroleum_prices_pb2 import PetroleumPriceRecord  # type: ignore[attr-defined]
+from protos.fao_food_price_index_pb2 import FaoFoodPriceRecord  # type: ignore[attr-defined]
+from protos.fed_h15_rates_pb2 import FedH15Record  # type: ignore[attr-defined]
+from protos.treasury_yield_curve_pb2 import TreasuryYieldRecord  # type: ignore[attr-defined]
+from protos.usda_crop_progress_pb2 import UsdaCropProgressRecord  # type: ignore[attr-defined]
+from protos.usgs_streamflow_pb2 import UsgsStreamflowRecord  # type: ignore[attr-defined]
 from src.scrapers import bls_cpi
 from src.scrapers import eia_electricity
 from src.scrapers import eia_natural_gas
