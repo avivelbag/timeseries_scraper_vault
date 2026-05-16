@@ -79,6 +79,30 @@ class TestRunHappyPath:
                 f"carloads_yoy_pct not finite for {rec.commodity_group}"
             )
 
+    def test_grain_carloads_yoy_pct_value(self, sample_html):
+        records = run(sample_html)
+        grain = next(r for r in records if r.commodity_group == "Grain")
+        assert grain.carloads_yoy_pct == pytest.approx(5.0), (
+            f"Grain carloads_yoy_pct expected +5.0, got {grain.carloads_yoy_pct}"
+        )
+
+    def test_coal_carloads_yoy_pct_value(self, sample_html):
+        records = run(sample_html)
+        coal = next(r for r in records if r.commodity_group == "Coal")
+        assert coal.carloads_yoy_pct == pytest.approx(-4.2), (
+            f"Coal carloads_yoy_pct expected -4.2, got {coal.carloads_yoy_pct}"
+        )
+
+    def test_no_carloads_yoy_pct_is_zero_for_all_non_zero_commodities(self, sample_html):
+        """Regression: column-detection bug caused all carloads_yoy_pct to silently be 0.0."""
+        records = run(sample_html)
+        non_zero = [r for r in records if r.commodity_group not in ("Intermodal",)]
+        non_zero_pcts = {r.commodity_group: r.carloads_yoy_pct for r in non_zero}
+        all_zero = all(v == 0.0 for v in non_zero_pcts.values())
+        assert not all_zero, (
+            f"All carloads_yoy_pct are 0.0 — column detection is broken. Values: {non_zero_pcts}"
+        )
+
     def test_all_records_are_aar_instances(self, sample_html):
         for rec in run(sample_html):
             assert isinstance(rec, AarWeeklyRailTrafficRecord)
@@ -215,6 +239,47 @@ class TestRunEdgeCases:
         for rec in records:
             assert _DATE_PATTERN.match(rec.week_ending_date)
             assert rec.carloads > 0
+
+    def test_year_ago_count_column_not_mistaken_for_yoy_pct(self):
+        """Year-Ago Carloads column (raw count) must not be parsed as the YoY% column."""
+        html = """
+        <html><body>
+        <p>For the week ending May 10, 2025</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Commodity Group</th>
+              <th>Current Week Carloads</th>
+              <th>Current Week Intermodal Units</th>
+              <th>Year-Ago Carloads</th>
+              <th>Carloads YoY Change</th>
+              <th>Intermodal YoY Change</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Grain</td><td>22,451</td><td>0</td><td>21,390</td><td>(+5.0%)</td><td>(+0.0%)</td></tr>
+            <tr><td>Coal</td><td>65,234</td><td>0</td><td>68,102</td><td>(-4.2%)</td><td>(+0.0%)</td></tr>
+            <tr><td>Chemicals</td><td>31,087</td><td>1,200</td><td>29,875</td><td>(+4.1%)</td><td>(+2.5%)</td></tr>
+            <tr><td>Petroleum</td><td>11,342</td><td>0</td><td>12,010</td><td>(-5.6%)</td><td>(+0.0%)</td></tr>
+            <tr><td>Nonmetallic Minerals</td><td>18,765</td><td>500</td><td>17,930</td><td>(+4.7%)</td><td>(+1.2%)</td></tr>
+            <tr><td>Forest Products</td><td>9,832</td><td>2,100</td><td>10,205</td><td>(-3.7%)</td><td>(+8.3%)</td></tr>
+            <tr><td>Motor Vehicles</td><td>14,521</td><td>3,400</td><td>13,987</td><td>(+3.8%)</td><td>(+12.1%)</td></tr>
+            <tr><td>Food and Farm</td><td>16,903</td><td>800</td><td>16,450</td><td>(+2.8%)</td><td>(-1.5%)</td></tr>
+            <tr><td>Metals</td><td>20,112</td><td>1,100</td><td>19,843</td><td>(+1.4%)</td><td>(+3.2%)</td></tr>
+            <tr><td>Stone Clay Glass</td><td>13,678</td><td>600</td><td>14,201</td><td>(-3.7%)</td><td>(+6.0%)</td></tr>
+          </tbody>
+        </table>
+        </body></html>
+        """
+        records = run(html)
+        grain = next(r for r in records if r.commodity_group == "Grain")
+        coal = next(r for r in records if r.commodity_group == "Coal")
+        assert grain.carloads_yoy_pct == pytest.approx(5.0), (
+            f"Grain yoy={grain.carloads_yoy_pct}; Year-Ago column was mistaken for YoY%"
+        )
+        assert coal.carloads_yoy_pct == pytest.approx(-4.2), (
+            f"Coal yoy={coal.carloads_yoy_pct}; Year-Ago column was mistaken for YoY%"
+        )
 
     def test_comma_formatted_integers_parsed(self):
         """Carloads like '65,234' must parse as 65234."""

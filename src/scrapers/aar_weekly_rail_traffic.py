@@ -1,17 +1,3 @@
-"""AAR Weekly Rail Traffic scraper.
-
-Fetches the Association of American Railroads weekly press release, which
-publishes U.S. rail carloads and intermodal units by commodity group. The
-press release is an HTML page containing a freeform article with embedded
-tables and percentage-change text.
-
-One AarWeeklyRailTrafficRecord is emitted per commodity group row in the
-table. The week_ending_date is extracted from a paragraph near the top of
-the article body. Percentage changes appear in the form "(+5.2%)" or
-"(-3.1%)" and are parsed by stripping parentheses and the trailing "%".
-"""
-
-import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -23,8 +9,6 @@ from src.bq_uploader import upload_rows
 from src.scrapers.http_client import fetch
 
 SOURCE_URL = "https://www.aar.org/news/weekly-railroad-traffic/"
-
-_log = logging.getLogger(__name__)
 
 _DATE_PATTERNS = [
     re.compile(
@@ -47,14 +31,6 @@ def _clean(text: str) -> str:
 
 
 def _parse_week_ending_date(soup: BeautifulSoup) -> str:
-    """Extract the week-ending date from article paragraph text.
-
-    Scans all <p> tags for the pattern "week ending <Month> <Day>, <Year>"
-    and returns an ISO-8601 date string (YYYY-MM-DD).
-
-    Raises:
-        ValueError: When no recognizable date phrase is found.
-    """
     for tag in soup.find_all(["p", "h1", "h2", "h3", "div", "span"]):
         text = _clean(tag.get_text())
         for pattern in _DATE_PATTERNS:
@@ -70,11 +46,6 @@ def _parse_week_ending_date(soup: BeautifulSoup) -> str:
 
 
 def _parse_pct(cell_text: str) -> float:
-    """Parse a percentage value from text like '(+5.2%)' or '(-3.1%)'.
-
-    Strips parentheses and extracts the numeric value including its sign.
-    Returns 0.0 when no numeric pattern is found.
-    """
     text = _clean(cell_text)
     m = _PCT_RE.search(text)
     if m:
@@ -86,7 +57,6 @@ def _parse_pct(cell_text: str) -> float:
 
 
 def _parse_int(cell_text: str) -> int:
-    """Parse a comma-formatted integer from a table cell."""
     text = _clean(cell_text).replace(",", "").replace(" ", "")
     if not text or text in ("-", "--", "n.a.", "N.A."):
         return 0
@@ -97,18 +67,11 @@ def _parse_int(cell_text: str) -> int:
 
 
 def _is_data_row(first_cell_text: str) -> bool:
-    """Return False for footnote rows (first cell starts with '*' or is blank)."""
     text = first_cell_text.strip()
     return bool(text) and not text.startswith("*")
 
 
 def _find_column_indices(header_rows: list[Tag]) -> dict[str, int]:
-    """Map logical column names to their zero-based index from the last header row.
-
-    Inspects the final <tr> in the thead to find columns by keyword matching.
-    Returns a dict with keys: 'commodity', 'carloads', 'intermodal',
-    'carloads_yoy', 'intermodal_yoy'. Missing columns default to -1.
-    """
     if not header_rows:
         return {}
 
@@ -130,6 +93,11 @@ def _find_column_indices(header_rows: list[Tag]) -> dict[str, int]:
         "intermodal_yoy": -1,
     }
 
+    def _is_yoy_signal(label: str) -> bool:
+        # Require an explicit change indicator — "year" alone matches "year-ago carloads",
+        # which is a raw prior-year count, not a percentage-change column.
+        return "yoy" in label or "change" in label or "%" in label
+
     for i, label in enumerate(expanded):
         if col_map["commodity"] == -1 and ("commodity" in label or i == 0):
             col_map["commodity"] = i
@@ -137,9 +105,9 @@ def _find_column_indices(header_rows: list[Tag]) -> dict[str, int]:
             col_map["carloads"] = i
         elif col_map["intermodal"] == -1 and "intermodal" in label and "yoy" not in label and "%" not in label and "change" not in label and "year" not in label:
             col_map["intermodal"] = i
-        elif col_map["carloads_yoy"] == -1 and "carload" in label and ("yoy" in label or "%" in label or "change" in label or "year" in label):
+        elif col_map["carloads_yoy"] == -1 and "carload" in label and _is_yoy_signal(label):
             col_map["carloads_yoy"] = i
-        elif col_map["intermodal_yoy"] == -1 and "intermodal" in label and ("yoy" in label or "%" in label or "change" in label or "year" in label):
+        elif col_map["intermodal_yoy"] == -1 and "intermodal" in label and _is_yoy_signal(label):
             col_map["intermodal_yoy"] = i
 
     return col_map
@@ -151,12 +119,6 @@ def _parse_table(
     source_url: str,
     fetch_ts: str,
 ) -> list[AarWeeklyRailTrafficRecord]:
-    """Parse a single commodity table and return one record per data row.
-
-    Handles colspan header rows by flattening them to determine logical column
-    positions. Strips footnote rows (first cell blank or starts with '*').
-    Parses percentage-change columns that contain values like '(+5.2%)'.
-    """
     thead = table.find("thead")
     tbody = table.find("tbody")
 
