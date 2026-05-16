@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package scraper;
+
+message CensusHousingStartsRecord {
+  string period_date                    = 1;  // YYYY-MM-DD (first day of reported month)
+  string region                         = 2;  // "United States", "Northeast", "Midwest", "South", "West"
+  string structure_type                 = 3;  // "1 unit", "2 to 4 units", "5 units or more", "Total"
+  float  starts_thousands               = 4;
+  float  permits_thousands              = 5;
+  float  completions_thousands          = 6;
+  float  under_construction_thousands   = 7;
+  string source_url                     = 8;
+  string fetch_time                     = 9;
+}
