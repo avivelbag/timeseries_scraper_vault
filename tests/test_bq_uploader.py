@@ -13,7 +13,9 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.bq_uploader import upload_rows
+from google.api_core.exceptions import NotFound
+
+from src.bq_uploader import fetch_existing_dates, upload_rows
 from protos.eia_petroleum_prices_pb2 import PetroleumPriceRecord  # type: ignore[attr-defined]
 
 
@@ -208,3 +210,133 @@ class TestUploadRowsErrorHandling:
             os.environ.pop("BQ_DATASET", None)
             with pytest.raises(KeyError):
                 upload_rows("tbl", [_make_proto_row()])
+
+
+def _make_proto_row_with_date(period_date: str, region: str = "U.S.", price: float = 3.12) -> PetroleumPriceRecord:
+    msg = PetroleumPriceRecord()
+    msg.source_url = "https://www.eia.gov/test"
+    msg.period_date = period_date
+    msg.product = "petroleum"
+    msg.region = region
+    msg.price_usd_per_gallon = price
+    msg.grade = "Regular"
+    msg.units = "USD/gallon"
+    return msg
+
+
+class TestFetchExistingDates:
+    def test_returns_set_of_date_strings_from_bq(self):
+        """Happy path: query results are returned as a set of strings."""
+        mock_client = MagicMock()
+        mock_client.query.return_value.result.return_value = [
+            {"period_date": "2025-01-01"},
+            {"period_date": "2025-01-02"},
+        ]
+
+        result = fetch_existing_dates(mock_client, "proj.ds.tbl", "period_date")
+
+        assert result == {"2025-01-01", "2025-01-02"}
+        mock_client.query.assert_called_once()
+        assert "period_date" in mock_client.query.call_args[0][0]
+
+    def test_returns_empty_set_when_table_not_found(self):
+        """NotFound exception from BQ is caught and an empty set is returned."""
+        mock_client = MagicMock()
+        mock_client.query.side_effect = NotFound("table not found")
+
+        result = fetch_existing_dates(mock_client, "proj.ds.new_table", "period_date")
+
+        assert result == set()
+
+    def test_empty_table_returns_empty_set(self):
+        """A table with no rows produces an empty set without error."""
+        mock_client = MagicMock()
+        mock_client.query.return_value.result.return_value = []
+
+        result = fetch_existing_dates(mock_client, "proj.ds.tbl", "period_date")
+
+        assert result == set()
+
+    def test_query_includes_limit_and_date_column(self):
+        """The issued query must include DISTINCT, the column name, and LIMIT 50000."""
+        mock_client = MagicMock()
+        mock_client.query.return_value.result.return_value = []
+
+        fetch_existing_dates(mock_client, "proj.ds.tbl", "my_date_col")
+
+        issued_query: str = mock_client.query.call_args[0][0]
+        assert "DISTINCT" in issued_query
+        assert "my_date_col" in issued_query
+        assert "50000" in issued_query
+
+
+class TestUploadRowsDeduplication:
+    def test_dedup_skips_existing_date_and_uploads_new(self, caplog):
+        """Rows whose date already exists in BQ are filtered; only new rows are inserted.
+
+        Mocks fetch_existing_dates to return {"2025-01-01"}.  A two-row batch with
+        period_dates "2025-01-01" and "2025-01-02" must result in exactly 1 row
+        inserted (the "2025-01-02" row) and 1 row skipped.
+        """
+        mock_client = MagicMock()
+        mock_client.insert_rows_json.return_value = []
+
+        row_existing = _make_proto_row_with_date("2025-01-01")
+        row_new = _make_proto_row_with_date("2025-01-02")
+
+        with patch("src.bq_uploader.bigquery.Client", return_value=mock_client), \
+             patch("src.bq_uploader.fetch_existing_dates", return_value={"2025-01-01"}), \
+             patch.dict(os.environ, {"BQ_PROJECT": "p", "BQ_DATASET": "d"}), \
+             caplog.at_level(logging.INFO, logger="src.bq_uploader"):
+            result = upload_rows("tbl", [row_existing, row_new], date_column="period_date")
+
+        inserted_dicts = mock_client.insert_rows_json.call_args[0][1]
+        assert result == 1
+        assert len(inserted_dicts) == 1
+        assert inserted_dicts[0]["period_date"] == "2025-01-02"
+        assert "Skipped 1" in caplog.text
+
+    def test_dedup_uploads_all_when_no_existing_dates(self):
+        """When fetch_existing_dates returns empty set, all rows are uploaded."""
+        mock_client = MagicMock()
+        mock_client.insert_rows_json.return_value = []
+
+        rows = [_make_proto_row_with_date("2025-01-01"), _make_proto_row_with_date("2025-01-02")]
+
+        with patch("src.bq_uploader.bigquery.Client", return_value=mock_client), \
+             patch("src.bq_uploader.fetch_existing_dates", return_value=set()), \
+             patch.dict(os.environ, {"BQ_PROJECT": "p", "BQ_DATASET": "d"}):
+            result = upload_rows("tbl", rows, date_column="period_date")
+
+        assert result == 2
+        assert len(mock_client.insert_rows_json.call_args[0][1]) == 2
+
+    def test_dedup_skips_all_when_all_dates_exist(self, caplog):
+        """When all row dates are already in BQ, no insert is made and 0 is returned."""
+        mock_client = MagicMock()
+        mock_client.insert_rows_json.return_value = []
+
+        rows = [_make_proto_row_with_date("2025-01-01"), _make_proto_row_with_date("2025-01-02")]
+
+        with patch("src.bq_uploader.bigquery.Client", return_value=mock_client), \
+             patch("src.bq_uploader.fetch_existing_dates", return_value={"2025-01-01", "2025-01-02"}), \
+             patch.dict(os.environ, {"BQ_PROJECT": "p", "BQ_DATASET": "d"}), \
+             caplog.at_level(logging.INFO, logger="src.bq_uploader"):
+            result = upload_rows("tbl", rows, date_column="period_date")
+
+        inserted_dicts = mock_client.insert_rows_json.call_args[0][1]
+        assert result == 0
+        assert len(inserted_dicts) == 0
+        assert "Skipped 2" in caplog.text
+
+    def test_no_date_column_skips_dedup_entirely(self):
+        """Without date_column, fetch_existing_dates is never called."""
+        mock_client = MagicMock()
+        mock_client.insert_rows_json.return_value = []
+
+        with patch("src.bq_uploader.bigquery.Client", return_value=mock_client), \
+             patch("src.bq_uploader.fetch_existing_dates") as mock_fetch, \
+             patch.dict(os.environ, {"BQ_PROJECT": "p", "BQ_DATASET": "d"}):
+            upload_rows("tbl", [_make_proto_row_with_date("2025-01-01")])
+
+        mock_fetch.assert_not_called()

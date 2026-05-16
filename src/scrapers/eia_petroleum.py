@@ -114,7 +114,7 @@ def main() -> int:
     """
     records = scrape()
     messages = [_record_to_proto(r) for r in records]
-    return upload_rows("eia_petroleum_prices", messages)
+    return upload_rows("eia_petroleum_prices", messages, date_column="period_date")
 
 
 if __name__ == "__main__":
