@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package scraper;
+
+message MortgageApplicationsRecord {
+  string week_ending_date = 1;
+  string index_name = 2;
+  double index_value = 3;
+  optional double change_pct_week = 4;
+  optional double change_pct_year = 5;
+  bool seasonally_adjusted = 6;
+  string source_url = 7;
+  string fetch_time = 8;
+}
