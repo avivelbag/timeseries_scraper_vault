@@ -13,7 +13,7 @@ src.http_client.fetch.
 from datetime import datetime, timezone
 
 from src.bq_uploader import upload_rows
-from src.http_client import fetch
+from src.scrapers.http_client import fetch
 from protos.nasa_giss_temp_pb2 import NasaGissTempRecord  # type: ignore[attr-defined]
 
 SOURCE_URL = "https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.txt"

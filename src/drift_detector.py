@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.http_client import fetch
+from src.scrapers.http_client import fetch
 
 _DEFAULT_REPORT_PATH = Path("workspace/scraper/drift_report.json")
 

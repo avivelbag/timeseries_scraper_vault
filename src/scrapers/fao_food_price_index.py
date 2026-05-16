@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 
 from src.bq_uploader import upload_rows
-from src.http_client import fetch
+from src.scrapers.http_client import fetch
 from protos.fao_food_price_index_pb2 import FaoFoodPriceRecord  # type: ignore[attr-defined]
 
 SOURCE_URL = "https://www.fao.org/worldfoodsituation/foodpricesindex/en/"
