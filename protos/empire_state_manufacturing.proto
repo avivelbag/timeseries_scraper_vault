@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package scraper;
+
+message EmpireStateManufacturingRecord {
+  string survey_date = 1;
+  double general_business_conditions = 2;
+  double new_orders = 3;
+  double shipments = 4;
+  double unfilled_orders = 5;
+  double delivery_time = 6;
+  double inventories = 7;
+  double prices_paid = 8;
+  double prices_received = 9;
+  double number_of_employees = 10;
+  double avg_workweek = 11;
+  double capital_expenditures = 12;
+  double technology_spending = 13;
+  string source_url = 14;
+  string fetch_time = 15;
+}
