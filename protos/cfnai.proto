@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package scraper;
+
+message CfnaiRecord {
+  string series_date = 1;
+  double cfnai = 2;
+  double cfnai_ma3 = 3;
+  double production_and_income = 4;
+  double employment_unemployment_hours = 5;
+  double personal_consumption_housing = 6;
+  double sales_orders_inventories = 7;
+  string source_url = 8;
+  string fetch_time = 9;
+}
