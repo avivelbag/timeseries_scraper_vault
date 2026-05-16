@@ -10,20 +10,21 @@ market code, followed by an "ALL" data line with nine whitespace-separated
 numbers (non-comm long/short/spreads, comm long/short, total long/short,
 non-rep long/short).  Spreads are at index 2 and are intentionally skipped.
 
-Each scrape covers only the current reporting week; historical backfill is
-out of scope for this implementation.
+Historical backfill is supported via scrape_year() and scrape_range().
 """
 
 import re
 from datetime import datetime, timezone
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from src.bq_uploader import upload_rows
 from src.scrapers.http_client import fetch
 from protos.cftc_cot_pb2 import CotRecord  # type: ignore[attr-defined]
 
 SOURCE_URL = "https://www.cftc.gov/dea/futures/deacmesf.htm"
+
+HISTORICAL_URL_TEMPLATE = "https://www.cftc.gov/dea/futures/deacmesf{year}.htm"
 
 # Matches a commodity header line: starts with an uppercase letter, ends with
 # a 6-digit CFTC contract market code, padded by 3+ spaces before the code.
@@ -67,7 +68,28 @@ def _extract_report_date(soup: BeautifulSoup) -> str:
     return ""
 
 
-def parse_html(html: str) -> list[CotRecord]:
+def _find_pre_with_data(soup: BeautifulSoup) -> Tag | None:
+    """Return the first <pre> block containing a commodity header line.
+
+    Some CFTC report pages include a separate introductory <pre> block (e.g.
+    a column legend) before the actual data block.  Scanning all blocks and
+    selecting the first one that matches _COMMODITY_RE avoids silently
+    returning an empty parse for pages with such a preamble.
+
+    Args:
+        soup: Parsed BeautifulSoup tree of the CFTC COT page.
+
+    Returns:
+        The first Tag whose text matches _COMMODITY_RE, or None if no such
+        block exists.
+    """
+    for pre in soup.find_all("pre"):
+        if any(_COMMODITY_RE.match(line) for line in pre.get_text().splitlines()):
+            return pre
+    return None
+
+
+def parse_html(html: str, source_url: str = SOURCE_URL) -> list[CotRecord]:
     """Parse the CFTC COT HTML page into a list of CotRecord messages.
 
     Finds the <pre> block in the page, scans line by line, and pairs each
@@ -91,16 +113,18 @@ def parse_html(html: str) -> list[CotRecord]:
 
     Args:
         html: Raw HTML string from the CFTC COT page.
+        source_url: URL to embed in each CotRecord's source_url field.
+            Defaults to SOURCE_URL; pass a year-specific URL for backfill.
 
     Returns:
         List of CotRecord instances, one per successfully parsed commodity row.
-        Returns an empty list when no <pre> block is present.
+        Returns an empty list when no <pre> block with commodity data is present.
     """
     soup = BeautifulSoup(html, "lxml")
     report_date = _extract_report_date(soup)
     fetch_time = datetime.now(timezone.utc).isoformat()
 
-    pre = soup.find("pre")
+    pre = _find_pre_with_data(soup)
     if not pre:
         return []
 
@@ -133,7 +157,7 @@ def parse_html(html: str) -> list[CotRecord]:
                         total_reportable_short=nums[6],
                         nonreportable_long=nums[7],
                         nonreportable_short=nums[8],
-                        source_url=SOURCE_URL,
+                        source_url=source_url,
                         fetch_time=fetch_time,
                     )
                 )
@@ -155,6 +179,49 @@ def scrape() -> list[CotRecord]:
     """
     resp = fetch(SOURCE_URL)
     return parse_html(resp.text)
+
+
+def scrape_year(year: int) -> list[CotRecord]:
+    """Fetch the CFTC COT page for a specific historical reporting year.
+
+    Constructs the year-specific URL from HISTORICAL_URL_TEMPLATE, fetches the
+    page via http_client.fetch (which enforces robots.txt, polite delay, and
+    exponential backoff), then parses the response.  The year-specific URL is
+    embedded in each returned CotRecord's source_url field.
+
+    Args:
+        year: Four-digit calendar year, e.g. 2020.  The CFTC typically
+            publishes historical pages from 1986 onward.
+
+    Returns:
+        List of CotRecord instances for all commodities in that year's report.
+    """
+    url = HISTORICAL_URL_TEMPLATE.format(year=year)
+    resp = fetch(url)
+    return parse_html(resp.text, source_url=url)
+
+
+def scrape_range(start_year: int, end_year: int) -> list[CotRecord]:
+    """Fetch CFTC COT data for a contiguous range of historical years.
+
+    Calls scrape_year for each year in [start_year, end_year] inclusive.
+    Years whose fetch or parse raises any exception are skipped so that a
+    single unavailable year does not abort a multi-year backfill.
+
+    Args:
+        start_year: First year to fetch, inclusive.
+        end_year: Last year to fetch, inclusive.
+
+    Returns:
+        Concatenated list of CotRecord instances from all successful years.
+    """
+    all_records: list[CotRecord] = []
+    for year in range(start_year, end_year + 1):
+        try:
+            all_records.extend(scrape_year(year))
+        except Exception:
+            pass
+    return all_records
 
 
 def main() -> int:
