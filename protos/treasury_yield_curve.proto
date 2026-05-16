@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+message TreasuryYieldRecord {
+  string date = 1;
+  float maturity_1m = 2;
+  float maturity_3m = 3;
+  float maturity_6m = 4;
+  float maturity_1y = 5;
+  float maturity_2y = 6;
+  float maturity_5y = 7;
+  float maturity_10y = 8;
+  float maturity_30y = 9;
+  string source_url = 10;
+  string fetch_time = 11;
+}

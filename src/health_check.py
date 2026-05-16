@@ -64,18 +64,24 @@ def check_all(scrapers: dict[str, tuple[ModuleType, str]]) -> list[HealthCheck]:
 
 def main() -> None:
     import os
-    from src.scrapers import eia_petroleum
+    from src.scrapers import eia_petroleum, treasury_yield_curve
 
-    fixture_path = os.path.join(
-        os.path.dirname(__file__), "..", "tests", "fixtures", "eia_petroleum_sample.html"
-    )
+    fixtures_dir = os.path.join(os.path.dirname(__file__), "..", "tests", "fixtures")
 
     scrapers: dict[str, tuple[ModuleType, str]] = {}
-    if os.path.exists(fixture_path):
-        with open(fixture_path, "r", encoding="utf-8") as fh:
+
+    eia_fixture = os.path.join(fixtures_dir, "eia_petroleum_sample.html")
+    if os.path.exists(eia_fixture):
+        with open(eia_fixture, "r", encoding="utf-8") as fh:
             scrapers["eia_petroleum"] = (eia_petroleum, fh.read())
-    else:
-        print("WARN: EIA fixture not found; no scrapers checked.")
+
+    treasury_fixture = os.path.join(fixtures_dir, "treasury_yield_curve_sample.html")
+    if os.path.exists(treasury_fixture):
+        with open(treasury_fixture, "r", encoding="utf-8") as fh:
+            scrapers["treasury_yield_curve"] = (treasury_yield_curve, fh.read())
+
+    if not scrapers:
+        print("WARN: no fixtures found; no scrapers checked.")
 
     results = check_all(scrapers)
     any_fail = False
