@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package scraper;
+
+message EiaElectricityRecord {
+  string week_ending_date        = 1;  // "YYYY-MM-DD"
+  string fuel_type               = 2;
+  float  generation_thousand_mwh = 3;
+  string source_url              = 4;
+  string fetch_time              = 5;  // ISO-8601 UTC
+}
