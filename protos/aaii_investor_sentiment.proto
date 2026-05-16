@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package scraper;
+
+message AaiiInvestorSentimentRecord {
+  string date = 1;
+  float bullish_pct = 2;
+  float neutral_pct = 3;
+  float bearish_pct = 4;
+  float bull_bear_spread = 5;
+  float bullish_average = 6;
+  float bearish_average = 7;
+  string source_url = 8;
+  string fetch_time = 9;
+}
