@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package scraper;
+
+import "google/protobuf/timestamp.proto";
+
+enum ReadingType {
+  PRELIMINARY = 0;
+  FINAL = 1;
+}
+
+message UmichConsumerSentimentRecord {
+  string survey_month = 1;
+  ReadingType reading_type = 2;
+  double index_value = 3;
+  double expectations_index = 4;
+  double current_conditions_index = 5;
+  string source_url = 6;
+  google.protobuf.Timestamp fetch_time = 7;
+}
