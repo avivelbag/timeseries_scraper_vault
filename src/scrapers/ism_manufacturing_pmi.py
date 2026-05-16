@@ -157,8 +157,10 @@ def _build_column_map(header_rows: list[Tag]) -> list[tuple[Optional[str], bool]
     row2_skip_cols = 0
 
     for cell in row1.find_all(["th", "td"]):
-        rowspan = int(cell.get("rowspan", 1))
-        colspan = int(cell.get("colspan", 1))
+        _rs = cell.get("rowspan")
+        rowspan = int(_rs) if isinstance(_rs, str) else 1
+        _cs = cell.get("colspan")
+        colspan = int(_cs) if isinstance(_cs, str) else 1
         month = _parse_month_header(cell.get_text(strip=True))
 
         if rowspan >= 2:
@@ -175,7 +177,8 @@ def _build_column_map(header_rows: list[Tag]) -> list[tuple[Optional[str], bool]
     col_is_value: list[bool] = [False] * row2_skip_cols
 
     for cell in row2.find_all(["th", "td"]):
-        colspan = int(cell.get("colspan", 1))
+        _cs2 = cell.get("colspan")
+        colspan = int(_cs2) if isinstance(_cs2, str) else 1
         label = cell.get_text(strip=True).lower()
         # "Series Index" → value column; Direction / Rate of Change / Trend → skip.
         is_value = "index" in label and "direction" not in label
