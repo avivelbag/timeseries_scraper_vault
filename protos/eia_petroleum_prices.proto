@@ -1,0 +1,14 @@
+syntax = "proto3";
+package scraper;
+import "google/protobuf/timestamp.proto";
+
+message PetroleumPriceRecord {
+  string source_url                    = 1;
+  google.protobuf.Timestamp fetch_time = 2;
+  string units                         = 3;
+  string period_date                   = 4;
+  string product                       = 5;
+  string region                        = 6;
+  double price_usd_per_gallon          = 7;
+  string grade                         = 8;
+}
