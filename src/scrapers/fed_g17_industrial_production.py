@@ -35,25 +35,14 @@ _INDEX_KEYWORDS = ("index",)
 
 
 def _clean(text: str) -> str:
-    """Strip whitespace and non-breaking spaces from a cell's text."""
     return text.replace("\xa0", " ").strip()
 
 
 def _is_suppressed(text: str) -> bool:
-    """Return True when a cell value is missing/suppressed (n.a., --, blank)."""
     return text in ("", "n.a.", "na", "NA", "--", "-", "N.A.")
 
 
 def _parse_value(raw: str) -> float:
-    """Parse a numeric cell, returning _SENTINEL for suppressed/footnote values.
-
-    Args:
-        raw: Cleaned cell text, e.g. '102.4' or 'n.a.' or '1/ preliminary'.
-
-    Returns:
-        Float value on success, or _SENTINEL when cell is suppressed or
-        starts with a footnote marker.
-    """
     clean = _clean(raw).replace(",", "")
     if _is_suppressed(clean) or _FOOTNOTE_RE.match(clean):
         _log.warning("Suppressed or footnote cell value: %r — using sentinel %s", raw, _SENTINEL)
@@ -66,16 +55,6 @@ def _parse_value(raw: str) -> float:
 
 
 def _classify_subseries(sub_label: str) -> str:
-    """Determine whether a sub-series label describes an index or capacity utilization.
-
-    Args:
-        sub_label: Cleaned text from the second header row, e.g. 'Index' or
-            '% of capacity'.
-
-    Returns:
-        'index' for production index columns, 'utilization' for capacity
-        utilization columns, or the raw label lowercased for anything else.
-    """
     lower = sub_label.lower()
     for kw in _CAPACITY_KEYWORDS:
         if kw in lower:
@@ -87,23 +66,6 @@ def _classify_subseries(sub_label: str) -> str:
 
 
 def _build_column_schema(header_row1: Tag, header_row2: Tag) -> list[tuple[str, str, int]]:
-    """Build a list of (group_label, sub_label, col_index) tuples from two header rows.
-
-    Reads the first header row for column groups (with colspan); reads the
-    second header row for sub-series labels. Skips the leading rowspan cell
-    (the Period/Date label column at index 0).
-
-    Args:
-        header_row1: BeautifulSoup Tag for the first <tr> of <thead>, containing
-            column group headers with colspan attributes.
-        header_row2: BeautifulSoup Tag for the second <tr> of <thead>, containing
-            individual sub-series labels.
-
-    Returns:
-        List of (group_label, sub_label, col_index) tuples where col_index is
-        the 0-based index into a data row's cells list (including the date cell
-        at index 0). Returns empty list when no valid groups are found.
-    """
     group_cells = header_row1.find_all(["th", "td"])
     sub_cells = header_row2.find_all(["th", "td"])
 
@@ -112,8 +74,8 @@ def _build_column_schema(header_row1: Tag, header_row2: Tag) -> list[tuple[str, 
         label = _clean(cell.get_text())
         if not label:
             continue
-        colspan = int(cell.get("colspan", 1))
-        rowspan = int(cell.get("rowspan", 1))
+        colspan = int(str(cell.get("colspan") or 1))
+        rowspan = int(str(cell.get("rowspan") or 1))
         if rowspan > 1:
             continue
         groups.append((label, colspan))
@@ -135,29 +97,6 @@ def _build_column_schema(header_row1: Tag, header_row2: Tag) -> list[tuple[str, 
 
 
 def _parse_table(table: Tag, source_url: str, fetch_ts: str) -> list[FedG17Record]:
-    """Parse one G.17 data table into a list of FedG17Record instances.
-
-    Identifies the two-row thead and then iterates over tbody rows. Rows whose
-    first cell is not in YYYY-MM format are skipped (footnotes, blank rows).
-    For each data cell, emits a FedG17Record with the appropriate fields. Cells
-    classified as 'index' populate index_value; cells classified as
-    'utilization' populate capacity_utilization_pct on the preceding index
-    record when the series_id prefix matches.
-
-    Because an 'index' and 'utilization' column pair share the same group
-    label, we post-process: for each (date, group) pair we merge the index
-    and utilization values into a single record, yielding one record per
-    (date, group) tuple.
-
-    Args:
-        table: BeautifulSoup Tag for a <table> element.
-        source_url: URL the page was fetched from.
-        fetch_ts: ISO-8601 timestamp string for when the page was fetched.
-
-    Returns:
-        List of FedG17Record instances. Empty list when the table lacks a
-        recognisable two-row header or no date rows.
-    """
     thead = table.find("thead")
     tbody = table.find("tbody")
 
@@ -206,9 +145,7 @@ def _parse_table(table: Tag, source_url: str, fetch_ts: str) -> list[FedG17Recor
                 entry["index_series_id"] = series_id
                 entry["index_sub_label"] = sub_label
             elif kind == "utilization":
-                entry["capacity_utilization_pct"] = value if value != _SENTINEL else None
-                if value == _SENTINEL:
-                    entry["capacity_utilization_pct"] = None
+                entry["capacity_utilization_pct"] = None if value == _SENTINEL else value
             else:
                 entry["index_value"] = value
                 entry.setdefault("index_series_id", series_id)
@@ -233,21 +170,6 @@ def _parse_table(table: Tag, source_url: str, fetch_ts: str) -> list[FedG17Recor
 
 
 def run(html: str, source_url: str = SOURCE_URL) -> list[FedG17Record]:
-    """Parse G.17 release HTML into a list of FedG17Record instances.
-
-    Finds all <table> elements on the page and delegates each to _parse_table.
-    Tables without a recognisable two-row thead are silently skipped.
-
-    Args:
-        html: Raw HTML string of the G.17 release page.
-        source_url: URL the page was fetched from, stored in each record.
-
-    Returns:
-        List of FedG17Record dataclass instances.
-
-    Raises:
-        ValueError: When html is empty or no records could be extracted.
-    """
     if not html or not html.strip():
         raise ValueError("Empty HTML provided to G.17 parser")
 
@@ -269,20 +191,6 @@ def run(html: str, source_url: str = SOURCE_URL) -> list[FedG17Record]:
 
 
 def scrape() -> list[FedG17Record]:
-    """Fetch the live G.17 release page and return parsed FedG17Record instances.
-
-    Delegates HTTP fetching to src.scrapers.http_client.fetch, which enforces
-    robots.txt compliance, a polite 2–5 s delay, and exponential backoff on
-    429/5xx responses. An additional 3-second courtesy sleep is applied after
-    the response is received.
-
-    Returns:
-        Same structure as run().
-
-    Raises:
-        ValueError: Propagated from run() when no records are extracted.
-        RuntimeError: When robots.txt disallows the target URL.
-    """
     resp = fetch(SOURCE_URL)
     time.sleep(3)
     return run(resp.text, source_url=SOURCE_URL)
